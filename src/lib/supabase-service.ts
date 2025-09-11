@@ -16,6 +16,24 @@ import type {
 export class SupabaseService {
   private supabase = createClient();
 
+  private isUuid(value: any): boolean {
+    if (!value || typeof value !== 'string') return false;
+    // Basic UUID v4 regex (accepts any valid UUID format with hyphens)
+    return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value);
+  }
+
+  private toUuidOrNull(value: any): string | null {
+    return this.isUuid(value) ? value : null;
+  }
+
+  private toISODate(value: any): string | null {
+    if (!value) return null;
+    const d = typeof value === 'string' || typeof value === 'number' ? new Date(value) : value;
+    if (Number.isNaN(d?.getTime?.())) return null;
+    // Expecting YYYY-MM-DD for date columns
+    return d.toISOString().slice(0, 10);
+  }
+
   // Clients
   async getClients(userId: string): Promise<Client[]> {
     const { data, error } = await this.supabase
@@ -97,73 +115,170 @@ export class SupabaseService {
   }
 
   // Transactions
-  async getTransactions(userId: string): Promise<Transaction[]> {
+  // Transactions - map snake_case -> camelCase and parse dates
+  async getTransactions(userId: string): Promise<any[]> {
     const { data, error } = await this.supabase
       .from('transactions')
       .select('*')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .order('transaction_date', { ascending: false });
     
     if (error) throw error;
-    return data || [];
+    return (data || []).map(item => ({
+      id: item.id,
+      type: item.type,
+      amount: Number(item.amount) || 0,
+      description: item.description,
+      categoryId: item.category_id || null,
+      clientId: item.client_id || null,
+      employeeId: item.employee_id || null,
+      currencyId: item.currency_id,
+      transactionDate: item.transaction_date ? new Date(item.transaction_date) : undefined,
+      isVatIncluded: !!item.is_vat_included,
+      vatRate: Number(item.vat_rate) || 0,
+      isRecurring: !!item.is_recurring,
+      recurringPeriod: item.recurring_period || null,
+      nextRecurringDate: item.next_recurring_date ? new Date(item.next_recurring_date) : null,
+      parentTransactionId: item.parent_transaction_id || null,
+      userId: item.user_id,
+      createdAt: item.created_at ? new Date(item.created_at) : undefined,
+      updatedAt: item.updated_at ? new Date(item.updated_at) : undefined,
+    }));
   }
 
-  async addTransaction(transaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>): Promise<Transaction> {
+  async addTransaction(transaction: any): Promise<any> {
+    // ONLY fields that exist in clean database schema
+    // Currency and date fallbacks will be handled below
+    let transactionRecord: any = {
+      type: transaction.type,
+      amount: Number(transaction.amount) || 0,
+      description: transaction.description || null,
+      category_id: this.toUuidOrNull(transaction.categoryId || transaction.category_id),
+      client_id: this.toUuidOrNull(transaction.clientId || transaction.client_id),
+      employee_id: this.toUuidOrNull(transaction.employeeId || transaction.employee_id),
+      currency_id: this.toUuidOrNull(transaction.currencyId || transaction.currency_id),
+      transaction_date: this.toISODate(transaction.transactionDate || transaction.transaction_date) || new Date().toISOString().slice(0, 10),
+      is_vat_included: !!(transaction.isVatIncluded || transaction.is_vat_included),
+      vat_rate: Number(transaction.vatRate || transaction.vat_rate) || 0,
+      is_recurring: !!(transaction.isRecurring || transaction.is_recurring),
+      recurring_period: transaction.recurringPeriod || transaction.recurring_period || null,
+      next_recurring_date: this.toISODate(transaction.nextRecurringDate || transaction.next_recurring_date),
+      parent_transaction_id: this.toUuidOrNull(transaction.parentTransactionId || transaction.parent_transaction_id),
+      user_id: transaction.userId || transaction.user_id
+      // Removed: cash_account_id (doesn't exist in clean schema)
+    };
+
+    // If currency_id is missing/invalid, pick the first active currency as fallback
+    if (!transactionRecord.currency_id) {
+      const currencies = await this.getCurrencies();
+      if (currencies && currencies.length > 0) {
+        transactionRecord.currency_id = currencies[0].id;
+      }
+    }
+
+    // Ensure user_id is a valid Supabase Auth UUID. If not, fetch current user
+    if (!this.isUuid(transactionRecord.user_id)) {
+      const { data } = await this.supabase.auth.getUser();
+      if (data?.user?.id && this.isUuid(data.user.id)) {
+        transactionRecord.user_id = data.user.id;
+      } else {
+        // As a last resort, set null to avoid invalid UUID error (RLS may block if required)
+        transactionRecord.user_id = null;
+      }
+    }
+
+    console.log('Supabase transaction record:', transactionRecord);
+
     const { data, error } = await this.supabase
       .from('transactions')
-      .insert([{
-        ...transaction,
-        user_id: transaction.userId,
-        category_id: transaction.categoryId,
-        client_id: transaction.clientId,
-        employee_id: transaction.employeeId,
-        currency_id: transaction.currencyId,
-        cash_account_id: transaction.cashAccountId,
-        transaction_date: transaction.transactionDate,
-        is_vat_included: transaction.isVatIncluded,
-        vat_rate: transaction.vatRate,
-        is_recurring: transaction.isRecurring,
-        recurring_period: transaction.recurringPeriod,
-        next_recurring_date: transaction.nextRecurringDate,
-        parent_transaction_id: transaction.parentTransactionId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
+      .insert([transactionRecord])
       .select()
       .single();
     
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Supabase transaction insert error:', error);
+      throw error;
+    }
+    // Map response to camelCase + Date objects immediately
+    return {
+      id: data.id,
+      type: data.type,
+      amount: Number(data.amount) || 0,
+      description: data.description,
+      categoryId: data.category_id || null,
+      clientId: data.client_id || null,
+      employeeId: data.employee_id || null,
+      currencyId: data.currency_id,
+      transactionDate: data.transaction_date ? new Date(data.transaction_date) : undefined,
+      isVatIncluded: !!data.is_vat_included,
+      vatRate: Number(data.vat_rate) || 0,
+      isRecurring: !!data.is_recurring,
+      recurringPeriod: data.recurring_period || null,
+      nextRecurringDate: data.next_recurring_date ? new Date(data.next_recurring_date) : null,
+      parentTransactionId: data.parent_transaction_id || null,
+      userId: data.user_id,
+      createdAt: data.created_at ? new Date(data.created_at) : undefined,
+      updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
+    };
   }
 
-  // Employees
-  async getEmployees(userId: string): Promise<Employee[]> {
+  // Delete operations (persisted)
+  async deleteClient(id: string): Promise<void> {
+    const { error } = await this.supabase.from('clients').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async deleteEmployee(id: string): Promise<void> {
+    const { error } = await this.supabase.from('employees').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async deleteTransaction(id: string): Promise<void> {
+    const { error } = await this.supabase.from('transactions').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  // Employees - map snake_case -> camelCase
+  async getEmployees(userId: string): Promise<any[]> {
     const { data, error } = await this.supabase
       .from('employees')
       .select('*')
       .eq('user_id', userId);
     
     if (error) throw error;
-    return data || [];
+    return (data || []).map(item => ({
+      id: item.id,
+      name: item.name,
+      position: item.position,
+      userId: item.user_id,
+      currencyId: item.currency_id,
+      netSalary: Number(item.net_salary) || 0,
+      payrollPeriod: item.payroll_period,
+      paymentDay: item.payment_day,
+      isActive: !!item.is_active,
+      email: item.email || undefined,
+      phone: item.phone || undefined,
+      address: item.address || undefined,
+      emergencyContact: item.emergency_contact || undefined,
+      contractStartDate: item.contract_start_date ? new Date(item.contract_start_date) : undefined,
+      contractEndDate: item.contract_end_date ? new Date(item.contract_end_date) : undefined,
+      createdAt: item.created_at ? new Date(item.created_at) : undefined,
+      updatedAt: item.updated_at ? new Date(item.updated_at) : undefined,
+    }));
   }
 
   async addEmployee(employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Promise<Employee> {
     const employeeRecord = {
-      // Don't include 'id' - let PostgreSQL generate UUID automatically
+      // ONLY fields that exist in clean database schema
       name: employee.name,
       position: employee.position,
-      user_id: employee.userId,
-      currency_id: employee.currencyId,
       net_salary: employee.netSalary,
+      currency_id: employee.currencyId,
       payroll_period: employee.payrollPeriod,
       payment_day: employee.paymentDay,
-      is_active: employee.isActive,
-      email: employee.email || null,
-      phone: employee.phone || null,
-      address: employee.address || null,
-      emergency_contact: employee.emergencyContact || null,
-      contract_start_date: employee.contractStartDate ? employee.contractStartDate.toISOString() : null,
-      contract_end_date: employee.contractEndDate ? employee.contractEndDate.toISOString() : null
-      // Don't include created_at/updated_at - let PostgreSQL handle defaults
+      is_active: employee.isActive !== undefined ? employee.isActive : true,
+      user_id: employee.userId
+      // Removed: email, phone, address, emergency_contact, contract dates (don't exist in clean schema)
     };
 
     console.log('Supabase employee record:', employeeRecord);
@@ -209,9 +324,205 @@ export class SupabaseService {
       .eq('user_id', userId);
     
     if (error) throw error;
-    return data || [];
+    
+    // Database field'larını TypeScript interface'e map et
+    return (data || []).map(item => ({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      color: item.color,
+      icon: item.icon,
+      isDefault: item.is_default,
+      userId: item.user_id,
+      createdAt: new Date(item.created_at)
+    }));
   }
 
+  // ===============================
+  // Invoices
+  // ===============================
+  async getInvoices(userId: string): Promise<any[]> {
+    const { data, error } = await this.supabase
+      .from('invoices')
+      .select('*')
+      .eq('user_id', userId)
+      .order('issue_date', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(item => ({
+      id: item.id,
+      userId: item.user_id,
+      clientId: item.client_id,
+      currencyId: item.currency_id,
+      issueDate: item.issue_date ? new Date(item.issue_date) : undefined,
+      dueDate: item.due_date ? new Date(item.due_date) : undefined,
+      invoiceNumber: item.invoice_number,
+      description: item.description || '',
+      items: item.items || [],
+      vatRate: Number(item.vat_rate) || 0,
+      subtotal: Number(item.net_amount) || 0,
+      total: Number(item.total_amount) || 0,
+      paidAmount: Number(item.paid_amount) || 0,
+      remainingAmount: Number(item.remaining_amount) || 0,
+      status: item.status,
+      isRecurring: !!item.is_recurring,
+      recurringMonths: item.recurring_months || null,
+      createdAt: item.created_at ? new Date(item.created_at) : undefined,
+      updatedAt: item.updated_at ? new Date(item.updated_at) : undefined
+    }));
+  }
+
+  async addInvoice(invoice: any): Promise<any> {
+    const record = {
+      user_id: this.isUuid(invoice.userId) ? invoice.userId : (await this.supabase.auth.getUser()).data?.user?.id,
+      client_id: this.toUuidOrNull(invoice.clientId),
+      // currencies.id is text in current schema
+      currency_id: invoice.currencyId || null,
+      issue_date: this.toISODate(invoice.issueDate) || new Date().toISOString().slice(0, 10),
+      due_date: this.toISODate(invoice.dueDate) || new Date().toISOString().slice(0, 10),
+      description: invoice.description || null,
+      items: Array.isArray(invoice.items) ? invoice.items : null,
+      invoice_number: invoice.invoiceNumber || null,
+      net_amount: Number(invoice.subtotal ?? invoice.netAmount) || 0,
+      vat_rate: Number(invoice.vatRate) || 0,
+      total_amount: Number(invoice.total ?? invoice.totalAmount) || 0,
+      paid_amount: Number(invoice.paidAmount) || 0,
+      remaining_amount: Number(invoice.remainingAmount ?? ((invoice.total ?? 0) - (invoice.paidAmount ?? 0))) || 0,
+      status: invoice.status || 'pending',
+      is_recurring: !!invoice.isRecurring,
+      recurring_months: invoice.recurringMonths || null,
+    };
+
+    // Fallback currency when not provided
+    if (!record.currency_id) {
+      const currencies = await this.getCurrencies().catch(() => [] as any[]);
+      if (currencies && currencies.length > 0) {
+        record.currency_id = currencies[0].id;
+      }
+    }
+    const { data, error } = await this.supabase
+      .from('invoices')
+      .insert([record])
+      .select()
+      .single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      userId: data.user_id,
+      clientId: data.client_id,
+      currencyId: data.currency_id,
+      issueDate: data.issue_date ? new Date(data.issue_date) : undefined,
+      dueDate: data.due_date ? new Date(data.due_date) : undefined,
+      description: data.description,
+      items: data.items || [],
+      invoiceNumber: data.invoice_number,
+      subtotal: Number(data.net_amount) || 0,
+      vatRate: Number(data.vat_rate) || 0,
+      total: Number(data.total_amount) || 0,
+      paidAmount: Number(data.paid_amount) || 0,
+      remainingAmount: Number(data.remaining_amount) || 0,
+      status: data.status,
+      isRecurring: !!data.is_recurring,
+      recurringMonths: data.recurring_months || null,
+      issueDate: new Date(data.issue_date),
+      dueDate: new Date(data.due_date),
+      createdAt: data.created_at ? new Date(data.created_at) : undefined,
+      updatedAt: data.updated_at ? new Date(data.updated_at) : undefined
+    };
+  }
+
+  async deleteInvoice(id: string): Promise<void> {
+    const { error } = await this.supabase.from('invoices').delete().eq('id', id);
+    if (error) throw error;
+  }
+
+  async updateInvoice(id: string, updates: any): Promise<any> {
+    const record: any = {};
+    if (updates.clientId !== undefined) record.client_id = this.toUuidOrNull(updates.clientId);
+    if (updates.currencyId !== undefined) record.currency_id = this.toUuidOrNull(updates.currencyId);
+    if (updates.issueDate !== undefined) record.issue_date = this.toISODate(updates.issueDate);
+    if (updates.dueDate !== undefined) record.due_date = this.toISODate(updates.dueDate);
+    if (updates.invoiceNumber !== undefined) record.invoice_number = updates.invoiceNumber;
+    if (updates.netAmount !== undefined) record.net_amount = Number(updates.netAmount) || 0;
+    if (updates.vatRate !== undefined) record.vat_rate = Number(updates.vatRate) || 0;
+    if (updates.totalAmount !== undefined) record.total_amount = Number(updates.totalAmount) || 0;
+    if (updates.status !== undefined) record.status = updates.status;
+    if (updates.isRecurring !== undefined) record.is_recurring = !!updates.isRecurring;
+    if (updates.recurringMonths !== undefined) record.recurring_months = updates.recurringMonths;
+    record.updated_at = new Date().toISOString();
+
+    const { data, error } = await this.supabase
+      .from('invoices')
+      .update(record)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return {
+      id,
+      ...updates
+    };
+  }
+
+  // ===============================
+  // Company Settings + Logos
+  // ===============================
+  async getCompanySettings(userId: string): Promise<any | null> {
+    const { data, error } = await this.supabase
+      .from('company_settings')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      id: data.id,
+      userId: data.user_id,
+      companyName: data.company_name,
+      address: data.address,
+      phone: data.phone,
+      email: data.email,
+      website: data.website,
+      taxNumber: data.tax_number,
+      lightModeLogo: data.light_mode_logo_url,
+      darkModeLogo: data.dark_mode_logo_url,
+      quoteLogo: data.quote_logo_url,
+      createdAt: data.created_at ? new Date(data.created_at) : undefined,
+      updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
+    };
+  }
+
+  async upsertCompanySettings(userId: string, updates: any): Promise<any> {
+    const record = {
+      user_id: userId,
+      company_name: updates.companyName,
+      address: updates.address,
+      phone: updates.phone,
+      email: updates.email,
+      website: updates.website,
+      tax_number: updates.taxNumber,
+      light_mode_logo_url: updates.lightModeLogo,
+      dark_mode_logo_url: updates.darkModeLogo,
+      quote_logo_url: updates.quoteLogo,
+      updated_at: new Date().toISOString()
+    };
+    const { data, error } = await this.supabase
+      .from('company_settings')
+      .upsert(record, { onConflict: 'user_id' })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async uploadLogo(file: File, path: string): Promise<string> {
+    const bucket = 'logos';
+    // ensure bucket exists (ignore errors if already exists)
+    try { await this.supabase.storage.createBucket(bucket, { public: true }); } catch {}
+    const { error: uploadError } = await this.supabase.storage.from(bucket).upload(path, file, { upsert: true });
+    if (uploadError) throw uploadError;
+    const { data } = this.supabase.storage.from(bucket).getPublicUrl(path);
+    return data.publicUrl;
+  }
   async addCategory(category: Omit<Category, 'id' | 'createdAt'>): Promise<Category> {
     const { data, error } = await this.supabase
       .from('categories')
@@ -236,7 +547,22 @@ export class SupabaseService {
       .eq('user_id', userId);
     
     if (error) throw error;
-    return data || [];
+    
+    // Database field'larını TypeScript interface'e map et
+    return (data || []).map(item => ({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      description: item.description,
+      amount: parseFloat(item.amount) || 0,
+      clientId: item.client_id,
+      currencyId: item.currency_id,
+      dueDate: new Date(item.due_date),
+      status: item.status,
+      userId: item.user_id,
+      createdAt: new Date(item.created_at),
+      updatedAt: new Date(item.updated_at)
+    }));
   }
 
   async addDebt(debt: Omit<Debt, 'id' | 'createdAt' | 'updatedAt'>): Promise<Debt> {
@@ -279,12 +605,12 @@ export class SupabaseService {
   // User data initialization
   async initializeUserData(userId: string) {
     try {
-      const [clients, employees, transactions, categories, debts, currencies] = await Promise.all([
+      const [clients, employees, transactions, categories, currencies] = await Promise.all([
         this.getClients(userId),
         this.getEmployees(userId),
         this.getTransactions(userId),
         this.getCategories(userId),
-        this.getDebts(userId),
+        // this.getDebts(userId), // DISABLED: debts table doesn't exist in clean schema
         this.getCurrencies()
       ]);
 
@@ -293,7 +619,7 @@ export class SupabaseService {
         employees, 
         transactions,
         categories,
-        debts,
+        debts: [], // Empty array for now
         currencies
       };
     } catch (error) {

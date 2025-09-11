@@ -45,8 +45,8 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        // Başarılı giriş
-        window.location.href = '/dashboard';
+        // Başarılı giriş - direkt analiz sayfasına git
+        window.location.href = '/analiz';
       }
     } catch (err) {
       setError('Giriş sırasında hata oluştu');

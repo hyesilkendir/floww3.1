@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, Edit, Trash2, Mail, Phone, MapPin, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,10 +15,12 @@ import { AuthLayout } from '@/components/layout/auth-layout';
 import type { Client } from '@/lib/database-schema';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { createClient } from '@/utils/supabase/client';
 
 export default function ClientsPage() {
   const router = useRouter();
-  const { clients, currencies, addClient, updateClient, deleteClient, user, getClientBalance, pendingBalances } = useAppStore();
+  const { clients, currencies, addClient, updateClient, deleteClient, user, getClientBalance, pendingBalances, loadUserData, setAuth } = useAppStore();
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -36,6 +38,51 @@ export default function ClientsPage() {
     contractEndDate: '',
     currencyId: '1', // Default TRY
   });
+
+  // Auth kontrolü ve veri yükleme
+  useEffect(() => {
+    const checkAuthAndLoadData = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error || !user) {
+          window.location.href = '/login';
+          return;
+        }
+        
+        setAuth({
+          id: user.id,
+          email: user.email || '',
+          username: user.user_metadata?.username || '',
+          password: '',
+          name: user.user_metadata?.name || user.email || '',
+          companyName: user.user_metadata?.company_name || 'CALAF.CO',
+          createdAt: new Date(user.created_at),
+          updatedAt: new Date()
+        });
+        
+        // Kullanıcı verilerini Supabase'den yükle
+        await loadUserData(user.id);
+        
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        window.location.href = '/login';
+      }
+    };
+
+    checkAuthAndLoadData();
+  }, [loadUserData, setAuth]);
+
+  // Loading state kontrolü
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

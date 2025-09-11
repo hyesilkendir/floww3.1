@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabaseService } from './supabase-service';
 import { createClient } from '@/utils/supabase/client';
+
+// NO AUTH MAPPING NEEDED - Use auth.users directly
 import type { 
   User, 
   Client, 
@@ -394,26 +396,16 @@ export const useAppStore = create<AppState>()(
         }
       },
       setAuth: (user) => set({ isAuthenticated: true, user }),
-      logout: () => {
+      logout: async () => {
         // Supabase'den çıkış yap
         const supabase = createClient();
-        supabase.auth.signOut();
+        await supabase.auth.signOut();
         
-        // Local state'i temizle
+        // SADECE AUTH BİLGİLERİNİ TEMİZLE - data'yı koru
         set({ 
           isAuthenticated: false, 
-          user: null,
-          clients: [],
-          employees: [],
-          transactions: [],
-          categories: defaultCategories,
-          quotes: [],
-          debts: [],
-          bonuses: [],
-          cashAccounts: [],
-          invoices: [],
-          pendingBalances: [],
-          regularPayments: []
+          user: null
+          // Data arrays'leri temizleme - database'de zaten mevcut
         });
       },
       
@@ -421,8 +413,14 @@ export const useAppStore = create<AppState>()(
         try {
           set({ loading: true });
           
-          // Supabase'den kullanıcı verilerini yükle
+          console.log('📊 Loading data for user:', userId);
+          
+          // Supabase'den kullanıcı verilerini yükle (NO MAPPING)
           const data = await supabaseService.initializeUserData(userId);
+          const [invoices, settings] = await Promise.all([
+            supabaseService.getInvoices(userId).catch(() => []),
+            supabaseService.getCompanySettings(userId).catch(() => null)
+          ]);
           
           set({
             clients: data.clients,
@@ -431,6 +429,8 @@ export const useAppStore = create<AppState>()(
             categories: data.categories.length > 0 ? data.categories : defaultCategories,
             debts: data.debts,
             currencies: data.currencies.length > 0 ? data.currencies : defaultCurrencies,
+            invoices: invoices as any,
+            companySettings: (settings as any) || get().companySettings,
             loading: false
           });
           
@@ -571,7 +571,9 @@ export const useAppStore = create<AppState>()(
             return;
           }
           
-          // Supabase'e kaydet
+          console.log('💾 Saving client with userId:', clientData.userId);
+          
+          // Supabase'e kaydet (NO MAPPING)
           const savedClient = await supabaseService.addClient(clientData);
           console.log('Client saved to Supabase:', savedClient);
           
@@ -610,10 +612,12 @@ export const useAppStore = create<AppState>()(
       
       deleteClient: async (id) => {
         try {
+          await supabaseService.deleteClient(id);
           set((state) => ({
             clients: state.clients.filter((client) => client.id !== id),
           }));
         } catch (err) {
+          console.error('Delete client error:', err);
           get().setError('Failed to delete client.');
         }
       },
@@ -644,7 +648,9 @@ export const useAppStore = create<AppState>()(
             return;
           }
           
-          // Supabase'e kaydet
+          console.log('💾 Saving employee with userId:', employeeData.userId);
+          
+          // Supabase'e kaydet (NO MAPPING)
           const savedEmployee = await supabaseService.addEmployee(employeeData);
           console.log('Employee saved to Supabase:', savedEmployee);
           
@@ -683,10 +689,12 @@ export const useAppStore = create<AppState>()(
       
       deleteEmployee: async (id) => {
         try {
+          await supabaseService.deleteEmployee(id);
           set((state) => ({
             employees: state.employees.filter((employee) => employee.id !== id),
           }));
         } catch (err) {
+          console.error('Delete employee error:', err);
           get().setError('Failed to delete employee.');
         }
       },
@@ -694,7 +702,9 @@ export const useAppStore = create<AppState>()(
       // Transaction actions
       addTransaction: async (transactionData) => {
         try {
-          // Önce Supabase'e kaydet
+          console.log('💾 Saving transaction with userId:', transactionData.userId);
+          
+          // Önce Supabase'e kaydet (NO MAPPING)
           const savedTransaction = await supabaseService.addTransaction(transactionData);
           
           // Sonra local state'e ekle
@@ -724,10 +734,12 @@ export const useAppStore = create<AppState>()(
       
       deleteTransaction: async (id) => {
         try {
+          await supabaseService.deleteTransaction(id);
           set((state) => ({
             transactions: state.transactions.filter((transaction) => transaction.id !== id),
           }));
         } catch (err) {
+          console.error('Delete transaction error:', err);
           get().setError('Failed to delete transaction.');
         }
       },
@@ -908,78 +920,39 @@ export const useAppStore = create<AppState>()(
       // Invoice actions
       addInvoice: async (invoiceData) => {
         try {
-          const invoice: Invoice = {
-            ...invoiceData,
-            id: generateId(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          
-          set((state) => ({ invoices: [...state.invoices, invoice] }));
-          
-          // Eğer tekrarlanan faturaysa, tekrarlama işlemini başlat
-          if (invoice.isRecurring && invoice.recurringMonths && invoice.recurringMonths > 1) {
-            get().generateRecurringInvoices(invoice.id);
-          }
-          
-          // Bekleyen bakiye oluştur (fatura ödenmediği sürece)
-          if (invoice.status !== 'paid') {
-            get().addPendingBalance({
-              clientId: invoice.clientId,
-              invoiceId: invoice.id,
-              amount: invoice.netAmountAfterTevkifat, // Tevkifat sonrası tutar
-              dueDate: invoice.dueDate,
-              description: `Fatura: ${invoice.invoiceNumber}`,
-              status: invoice.status === 'overdue' ? ('overdue' as const) : ('pending' as const),
-            });
-          }
+          const user = get().user;
+          if (!user) return;
+          const saved = await supabaseService.addInvoice({ ...invoiceData, userId: user.id });
+          set((state) => ({ invoices: [...state.invoices, saved] }));
         } catch (err) {
+          console.error('Failed to add invoice:', err);
           get().setError('Failed to add invoice.');
         }
       },
       
       updateInvoice: async (id, updates) => {
         try {
+          const updated = await supabaseService.updateInvoice(id, updates);
           set((state) => ({
             invoices: state.invoices.map((invoice) =>
-              invoice.id === id ? { ...invoice, ...updates, updatedAt: new Date() } : invoice
+              invoice.id === id ? { ...invoice, ...updates, ...updated } : invoice
             ),
           }));
         } catch (err) {
+          console.error('Failed to update invoice:', err);
           get().setError('Failed to update invoice.');
         }
       },
       
       deleteInvoice: async (id) => {
         try {
-          const invoice = get().invoices.find((inv: Invoice) => inv.id === id);
-          if (!invoice) return;
-          
-          // İlgili transaction'ları sil (fatura numarasını içerenler)
-          const transactionsToDelete = get().transactions.filter((t: Transaction) => 
-            t.description.includes(`Fatura: ${invoice.invoiceNumber}`)
-          );
-          
-          for (const transaction of transactionsToDelete) {
-            await get().deleteTransaction(transaction.id);
-          }
-          
-          // İlgili bekleyen bakiyeleri de sil
-          const pendingBalances = get().pendingBalances.filter((pb: PendingBalance) => pb.invoiceId !== id);
-          
-          // Eğer tekrarlanan faturanın ana faturasıysa, tüm tekrarlanan faturaları da sil
-          if (invoice.isRecurring && !invoice.parentInvoiceId) {
-            const recurringInvoices = get().invoices.filter((inv: Invoice) => inv.parentInvoiceId === id);
-            for (const recurringInvoice of recurringInvoices) {
-              await get().deleteInvoice(recurringInvoice.id);
-            }
-          }
-          
+          await supabaseService.deleteInvoice(id);
           set((state) => ({
             invoices: state.invoices.filter((invoice: Invoice) => invoice.id !== id),
-            pendingBalances: pendingBalances
+            pendingBalances: state.pendingBalances.filter((pb: PendingBalance) => pb.invoiceId !== id)
           }));
         } catch (err) {
+          console.error('Failed to delete invoice:', err);
           get().setError('Failed to delete invoice.');
         }
       },

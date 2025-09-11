@@ -207,7 +207,7 @@ export default function ExpensesPage() {
     const transactionData = {
       type: 'expense' as const,
       amount,
-      currencyId: '1', // Default TRY
+      currencyId: formData.currencyId || '1', // UI'de varsa kullan, yoksa service fallback
       categoryId: formData.categoryId,
       clientId: formData.clientId && formData.clientId !== 'none' ? formData.clientId : undefined,
       employeeId: formData.employeeId && formData.employeeId !== 'none' ? formData.employeeId : undefined,
@@ -215,15 +215,15 @@ export default function ExpensesPage() {
         ? formData.cashAccountId 
         : defaultCashAccount?.id,
       description: formData.description,
-      transactionDate: new Date(formData.transactionDate),
+      transactionDate: formData.transactionDate || undefined,
       isVatIncluded: formData.isVatIncluded,
       vatRate,
       isRecurring: formData.isRecurring,
       recurringPeriod: formData.isRecurring ? formData.recurringPeriod : undefined,
-      nextRecurringDate: formData.isRecurring ? 
-        new Date(new Date(formData.transactionDate).getTime() + (30 * 24 * 60 * 60 * 1000)) : // 30 days later
-        undefined,
-      userId: user?.id || 'admin-user-1',
+      nextRecurringDate: formData.isRecurring && formData.transactionDate
+        ? new Date(new Date(formData.transactionDate).getTime() + (30 * 24 * 60 * 60 * 1000))
+        : undefined,
+      userId: user?.id,
     };
 
     if (editingTransaction) {

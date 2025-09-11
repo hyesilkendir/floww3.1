@@ -100,7 +100,8 @@ export default function InvoicesPage() {
 
   // Form hesaplamaları
   const calculations = useMemo(() => {
-    const subtotal = formData.items.reduce((sum, item) => sum + item.total, 0);
+    const itemsSafe = Array.isArray(formData.items) ? formData.items : [];
+    const subtotal = itemsSafe.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
     const vatRate = parseFloat(formData.vatRate) / 100;
     const vatAmount = subtotal * vatRate;
     const totalBeforeTevkifat = subtotal + vatAmount;
@@ -126,18 +127,20 @@ export default function InvoicesPage() {
   // Filtrelenmiş faturalar
   const filteredInvoices = invoices.filter(invoice => {
     const client = clients.find(c => c.id === invoice.clientId);
-    const matchesSearch = invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         invoice.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         client?.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = (searchTerm || '').toLowerCase();
+    const matchesSearch = (invoice.invoiceNumber || '').toLowerCase().includes(q) ||
+                         (invoice.description || '').toLowerCase().includes(q) ||
+                         ((client?.name || '').toLowerCase().includes(q));
     const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
     const matchesClient = clientFilter === 'all' || invoice.clientId === clientFilter;
     
     return matchesSearch && matchesStatus && matchesClient;
   });
 
-  const formatCurrency = (amount: number, currencyId?: string) => {
+  const formatCurrency = (amount: number | undefined, currencyId?: string) => {
     const currency = currencies.find(c => c.id === (currencyId || '1'));
-    return `${currency?.symbol || '₺'} ${amount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
+    const safe = typeof amount === 'number' && isFinite(amount) ? amount : 0;
+    return `${currency?.symbol || '₺'} ${safe.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
   };
 
   const getStatusBadge = (status: Invoice['status']) => {
@@ -247,7 +250,7 @@ export default function InvoicesPage() {
       contractEndDate: addDays(new Date(), 365),
       balance: 0,
       isActive: true,
-      userId: user?.id || 'admin-user-1',
+      userId: user?.id,
     });
 
     // Yeni eklenen cariyi seç
@@ -268,8 +271,8 @@ export default function InvoicesPage() {
     const invoiceData = {
       clientId: formData.clientId,
       invoiceNumber: formData.invoiceNumber || generateInvoiceNumber(),
-      issueDate: new Date(formData.issueDate),
-      dueDate: new Date(formData.dueDate),
+      issueDate: formData.issueDate || undefined,
+      dueDate: formData.dueDate || undefined,
       description: formData.description,
       items: formData.items,
       subtotal: calculations.subtotal,
@@ -288,7 +291,7 @@ export default function InvoicesPage() {
       paidAmount: 0,
       remainingAmount: calculations.netAmountAfterTevkifat,
       currencyId: formData.currencyId,
-      userId: user?.id || 'admin-user-1',
+      userId: user?.id,
     };
 
     if (editingInvoice) {
@@ -309,7 +312,7 @@ export default function InvoicesPage() {
       issueDate: format(invoice.issueDate, 'yyyy-MM-dd'),
       dueDate: format(invoice.dueDate, 'yyyy-MM-dd'),
       description: invoice.description,
-      items: invoice.items,
+      items: Array.isArray(invoice.items) ? invoice.items : [],
       vatRate: invoice.vatRate.toString(),
       tevkifatApplied: invoice.tevkifatApplied,
       tevkifatRate: invoice.tevkifatRate || '7/10',

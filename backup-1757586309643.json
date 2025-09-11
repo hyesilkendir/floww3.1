@@ -1,0 +1,242 @@
+{
+  "timestamp": "2025-09-11T10:25:07.040Z",
+  "auth_users": [
+    {
+      "id": "a0ae7d95-bb23-4b83-b213-c3712e53c321",
+      "email": "admin@calaf.co",
+      "created_at": "2025-09-11T10:21:16.913688Z",
+      "user_metadata": {
+        "company_name": "CALAF.CO",
+        "email": "admin@calaf.co",
+        "email_verified": true,
+        "name": "sdafg",
+        "phone_verified": false,
+        "sub": "a0ae7d95-bb23-4b83-b213-c3712e53c321",
+        "username": "admin"
+      }
+    },
+    {
+      "id": "da3351d1-e7be-40bc-af77-86b0c0bc636b",
+      "email": "asdfadf@calaf.co",
+      "created_at": "2025-09-11T09:07:56.502765Z",
+      "user_metadata": {
+        "company_name": "CALAF.CO",
+        "email": "asdfadf@calaf.co",
+        "email_verified": true,
+        "name": "sdga",
+        "phone_verified": false,
+        "sub": "da3351d1-e7be-40bc-af77-86b0c0bc636b",
+        "username": "admin"
+      }
+    },
+    {
+      "id": "76083e2b-279a-45e7-aad8-cba923f07ddc",
+      "email": "info@calaf.co",
+      "created_at": "2025-09-10T18:10:49.263557Z",
+      "user_metadata": {
+        "email_verified": true
+      }
+    },
+    {
+      "id": "56602795-15c2-41c7-8e8a-44ecc2615f5d",
+      "email": "yesilkendir@gmail.com",
+      "created_at": "2025-09-10T17:54:30.542206Z",
+      "user_metadata": {
+        "company_name": "CALAF.CO",
+        "email": "yesilkendir@gmail.com",
+        "email_verified": true,
+        "name": "sdfasdf",
+        "phone_verified": false,
+        "sub": "56602795-15c2-41c7-8e8a-44ecc2615f5d",
+        "username": "admin"
+      }
+    }
+  ],
+  "custom_users": [
+    {
+      "id": "admin-user-1",
+      "email": "admin@calaf.co",
+      "username": "admin",
+      "password": "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
+      "name": "Calaf.co Admin",
+      "company_name": "CALAF.CO",
+      "is_verified": true,
+      "created_at": "2025-09-10T18:03:10.223666",
+      "updated_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "1",
+      "email": "default@app.com",
+      "username": "default",
+      "password": "hashed_password_here",
+      "name": "Default User",
+      "company_name": "Default Company",
+      "is_verified": false,
+      "created_at": "2025-09-11T09:33:28.365837",
+      "updated_at": "2025-09-11T09:33:28.365837"
+    }
+  ],
+  "clients": [
+    {
+      "id": "297467c3-d125-451d-a965-a81d82bb053c",
+      "name": "ABC Teknoloji Ltd. Şti.",
+      "email": "info@abcteknoloji.com",
+      "phone": "+90 212 555 1234",
+      "address": "Maslak Mahallesi, Büyükdere Cad. No:123 Şişli/İstanbul",
+      "tax_number": "1234567890",
+      "contact_person": "Ahmet Yılmaz",
+      "contract_start_date": "2025-09-11T10:09:56.754",
+      "contract_end_date": "2026-09-11T10:09:56.754",
+      "currency_id": "1",
+      "balance": 0,
+      "is_active": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-11T10:09:57.387257",
+      "updated_at": "2025-09-11T10:09:57.387257"
+    }
+  ],
+  "employees": [
+    {
+      "id": "23b29d38-99b8-4a98-9c63-8186c188f9de",
+      "name": "Mehmet Özkan",
+      "position": "Grafik Tasarımcı",
+      "net_salary": 15000,
+      "currency_id": "1",
+      "payroll_period": "monthly",
+      "payment_day": 5,
+      "is_active": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-11T10:09:57.648495",
+      "updated_at": "2025-09-11T10:09:57.648495",
+      "email": null,
+      "phone": null,
+      "address": null,
+      "emergency_contact": null,
+      "contract_start_date": null,
+      "contract_end_date": null
+    }
+  ],
+  "transactions": [],
+  "categories": [
+    {
+      "id": "cat-office-expenses",
+      "name": "Office Expenses",
+      "type": "expense",
+      "color": "#ef4444",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-marketing",
+      "name": "Marketing",
+      "type": "expense",
+      "color": "#f97316",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-technology",
+      "name": "Technology",
+      "type": "expense",
+      "color": "#8b5cf6",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-salary-payments",
+      "name": "Salary Payments",
+      "type": "expense",
+      "color": "#06b6d4",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-client-payments",
+      "name": "Client Payments",
+      "type": "income",
+      "color": "#22c55e",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-other-income",
+      "name": "Other Income",
+      "type": "income",
+      "color": "#84cc16",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-utilities",
+      "name": "Utilities",
+      "type": "expense",
+      "color": "#ef4444",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-rent",
+      "name": "Rent",
+      "type": "expense",
+      "color": "#dc2626",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-fuel",
+      "name": "Fuel",
+      "type": "expense",
+      "color": "#f59e0b",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    },
+    {
+      "id": "cat-maintenance",
+      "name": "Maintenance",
+      "type": "expense",
+      "color": "#7c3aed",
+      "is_default": true,
+      "user_id": "admin-user-1",
+      "created_at": "2025-09-10T18:03:10.223666"
+    }
+  ],
+  "currencies": [
+    {
+      "id": "1",
+      "code": "TRY",
+      "name": "Turkish Lira",
+      "symbol": "TL",
+      "is_active": true
+    },
+    {
+      "id": "2",
+      "code": "USD",
+      "name": "US Dollar",
+      "symbol": "$",
+      "is_active": true
+    },
+    {
+      "id": "3",
+      "code": "EUR",
+      "name": "Euro",
+      "symbol": "EUR",
+      "is_active": true
+    },
+    {
+      "id": "4",
+      "code": "GBP",
+      "name": "British Pound",
+      "symbol": "GBP",
+      "is_active": true
+    }
+  ]
+}
