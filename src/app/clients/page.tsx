@@ -107,7 +107,7 @@ export default function ClientsPage() {
       currencyId: formData.currencyId,
       balance: editingClient?.balance || 0,
       isActive: true,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     };
 
     if (editingClient) {

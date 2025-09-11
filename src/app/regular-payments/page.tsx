@@ -64,7 +64,7 @@ export default function RegularPaymentsPage() {
       category: formData.category,
       status: formData.status,
       description: formData.description || undefined,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     } as Omit<RegularPayment, 'id' | 'createdAt' | 'updatedAt'>;
 
     if (editing) {

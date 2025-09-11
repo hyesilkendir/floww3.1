@@ -197,7 +197,7 @@ export default function QuotesPage() {
       tevkifatRate: formData.tevkifatApplied ? formData.tevkifatRate : undefined,
       tevkifatAmount: formData.tevkifatApplied ? totals.tevkifatAmount : undefined,
       netAmountAfterTevkifat: formData.tevkifatApplied ? totals.netAmountAfterTevkifat : undefined,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     };
 
     if (editingQuote) {

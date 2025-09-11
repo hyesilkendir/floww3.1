@@ -247,7 +247,7 @@ export default function InvoicesPage() {
       contractEndDate: addDays(new Date(), 365),
       balance: 0,
       isActive: true,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     });
 
     // Yeni eklenen cariyi seç
@@ -288,7 +288,7 @@ export default function InvoicesPage() {
       paidAmount: 0,
       remainingAmount: calculations.netAmountAfterTevkifat,
       currencyId: formData.currencyId,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     };
 
     if (editingInvoice) {

@@ -138,7 +138,7 @@ export default function DebtsPage() {
       status: 'pending' as const,
       clientId: formData.clientId && formData.clientId !== 'none' ? formData.clientId : undefined,
       description: formData.description || undefined,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     };
 
     if (editingDebt) {

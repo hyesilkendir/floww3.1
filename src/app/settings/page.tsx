@@ -150,7 +150,7 @@ export default function SettingsPage() {
       type: categoryFormData.type,
       color: categoryFormData.color,
       isDefault: false,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     };
 
     if (editingCategory) {

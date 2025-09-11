@@ -154,7 +154,7 @@ export default function EmployeesPage() {
       payrollPeriod: employeeFormData.payrollPeriod,
       paymentDay: parseInt(employeeFormData.paymentDay),
       isActive: true,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
       email: employeeFormData.email || undefined,
       phone: employeeFormData.phone || undefined,
       address: employeeFormData.address || undefined,
@@ -187,7 +187,7 @@ export default function EmployeesPage() {
       currencyId: bonusFormData.currencyId,
       description: bonusFormData.description,
       paymentDate: new Date(bonusFormData.paymentDate),
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     };
 
     addBonus(bonusData);

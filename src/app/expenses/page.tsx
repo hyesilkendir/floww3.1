@@ -223,7 +223,7 @@ export default function ExpensesPage() {
       nextRecurringDate: formData.isRecurring ? 
         new Date(new Date(formData.transactionDate).getTime() + (30 * 24 * 60 * 60 * 1000)) : // 30 days later
         undefined,
-      userId: user?.id || '1',
+      userId: user?.id || 'admin-user-1',
     };
 
     if (editingTransaction) {

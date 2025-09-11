@@ -256,7 +256,7 @@ export const useAppStore = create<AppState>()(
           // 3. EN SON: Default admin kontrolü (sadece hiç kullanıcı yoksa)
           if ((username === 'admin' || username === 'admin@calaf.co') && password === '532d7315' && allUsers.length === 0) {
             const demoUser: User = {
-              id: '1',
+              id: 'admin-user-1',
               email: 'admin@calaf.co',
               password: '532d7315',
               name: 'Admin User',
