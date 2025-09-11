@@ -42,11 +42,27 @@ export function Header() {
         <Menu className="h-5 w-5" />
       </Button>
 
-      {/* Page title */}
-      <div className="flex-1 lg:pl-0">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          Dashboard
-        </h1>
+      {/* Company and User Info */}
+      <div className="flex-1 lg:pl-0 flex items-center space-x-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+            CALAF.CO
+          </h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Muhasebe Sistemi
+          </p>
+        </div>
+        <div className="hidden md:block">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+              A
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">Admin User</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">CALAF.CO</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Actions */}

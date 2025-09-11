@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: '.env.local' });
 const postgres = require('postgres');
 const fs = require('fs');
 const path = require('path');
@@ -9,9 +9,9 @@ async function runSupabaseMigrations() {
   try {
     console.log('🚀 Starting Supabase migration process...');
     
-    const databaseUrl = process.env.DATABASE_URL;
+    const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
     if (!databaseUrl) {
-      throw new Error('DATABASE_URL environment variable is required');
+      throw new Error('DATABASE_URL, POSTGRES_URL_NON_POOLING, or POSTGRES_URL environment variable is required');
     }
     
     // Connect to database

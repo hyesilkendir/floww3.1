@@ -14,15 +14,7 @@ interface AuthLayoutProps {
 }
 
 function AuthLayoutContent({ children }: AuthLayoutProps) {
-  const { isAuthenticated, theme } = useAppStore();
-  const router = useRouter();
-  const isHydrated = useStoreHydration();
-
-  useEffect(() => {
-    if (isHydrated && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, router, isHydrated]);
+  const { theme } = useAppStore();
 
   useEffect(() => {
     // Apply theme class to html element
@@ -32,14 +24,6 @@ function AuthLayoutContent({ children }: AuthLayoutProps) {
       root.classList.add(theme);
     }
   }, [theme]);
-
-  if (!isHydrated || !isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { supabaseService } from './supabase-service';
+import { createClient } from '@/utils/supabase/client';
 import type { 
   User, 
   Client, 
@@ -61,6 +63,7 @@ interface AppState {
   changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   setAuth: (user: User) => void;
   logout: () => void;
+  loadUserData: (userId: string) => Promise<void>;
   setTheme: (theme: 'light' | 'dark') => void;
   setSidebarOpen: (open: boolean) => void;
   setError: (error: string | null) => void;
@@ -391,7 +394,54 @@ export const useAppStore = create<AppState>()(
         }
       },
       setAuth: (user) => set({ isAuthenticated: true, user }),
-      logout: () => set({ isAuthenticated: false, user: null }),
+      logout: () => {
+        // Supabase'den çıkış yap
+        const supabase = createClient();
+        supabase.auth.signOut();
+        
+        // Local state'i temizle
+        set({ 
+          isAuthenticated: false, 
+          user: null,
+          clients: [],
+          employees: [],
+          transactions: [],
+          categories: defaultCategories,
+          quotes: [],
+          debts: [],
+          bonuses: [],
+          cashAccounts: [],
+          invoices: [],
+          pendingBalances: [],
+          regularPayments: []
+        });
+      },
+      
+      loadUserData: async (userId: string) => {
+        try {
+          set({ loading: true });
+          
+          // Supabase'den kullanıcı verilerini yükle
+          const data = await supabaseService.initializeUserData(userId);
+          
+          set({
+            clients: data.clients,
+            employees: data.employees,
+            transactions: data.transactions,
+            categories: data.categories.length > 0 ? data.categories : defaultCategories,
+            debts: data.debts,
+            currencies: data.currencies.length > 0 ? data.currencies : defaultCurrencies,
+            loading: false
+          });
+          
+        } catch (error) {
+          console.error('Error loading user data:', error);
+          set({ 
+            error: 'Veriler yüklenirken hata oluştu',
+            loading: false 
+          });
+        }
+      },
       
       // User management
       addUser: async (userData) => {
@@ -504,15 +554,45 @@ export const useAppStore = create<AppState>()(
       // Client actions
       addClient: async (clientData) => {
         try {
-          const client: Client = {
-            ...clientData,
-            id: generateId(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          set((state) => ({ clients: [...state.clients, client] }));
+          console.log('Adding client:', clientData);
+          
+          // Loading state başlat
+          set({ loading: true, error: null });
+          
+          // Önce aynı isimde client var mı kontrol et
+          const existingClient = get().clients.find(c => 
+            c.name.toLowerCase() === clientData.name.toLowerCase() && 
+            c.userId === clientData.userId
+          );
+          
+          if (existingClient) {
+            console.warn('Client already exists:', existingClient.name);
+            set({ loading: false });
+            return;
+          }
+          
+          // Supabase'e kaydet
+          const savedClient = await supabaseService.addClient(clientData);
+          console.log('Client saved to Supabase:', savedClient);
+          
+          // Local state'e ekle
+          set((state) => ({ 
+            clients: [...state.clients, savedClient],
+            loading: false 
+          }));
+          console.log('Client added to local state');
         } catch (err) {
-          get().setError('Failed to add client.');
+          console.error('Error adding client:', err);
+          set({ loading: false });
+          
+          // Specific error handling
+          if (err.code === '23505') {
+            get().setError('Bu isimde bir cari zaten mevcut.');
+          } else if (err.code === 'PGRST116') {
+            get().setError('Veritabanı bağlantı hatası. Lütfen tekrar deneyin.');
+          } else {
+            get().setError(`Cari eklenirken hata oluştu: ${err.message || err}`);
+          }
         }
       },
       
@@ -541,15 +621,51 @@ export const useAppStore = create<AppState>()(
       // Employee actions
       addEmployee: async (employeeData) => {
         try {
-          const employee: Employee = {
-            ...employeeData,
-            id: generateId(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          set((state) => ({ employees: [...state.employees, employee] }));
+          const user = get().user;
+          if (!user) {
+            get().setError('Kullanıcı girişi gerekli.');
+            return;
+          }
+
+          console.log('Adding employee:', employeeData);
+          
+          // Loading state başlat
+          set({ loading: true, error: null });
+          
+          // Aynı isimde employee var mı kontrol et
+          const existingEmployee = get().employees.find(e => 
+            e.name.toLowerCase() === employeeData.name.toLowerCase() && 
+            e.userId === employeeData.userId
+          );
+          
+          if (existingEmployee) {
+            console.warn('Employee already exists:', existingEmployee.name);
+            set({ loading: false });
+            return;
+          }
+          
+          // Supabase'e kaydet
+          const savedEmployee = await supabaseService.addEmployee(employeeData);
+          console.log('Employee saved to Supabase:', savedEmployee);
+          
+          // Local state'e ekle
+          set((state) => ({ 
+            employees: [...state.employees, savedEmployee],
+            loading: false 
+          }));
+          console.log('Employee added to local state');
         } catch (err) {
-          get().setError('Failed to add employee.');
+          console.error('Error adding employee:', err);
+          set({ loading: false });
+          
+          // Specific error handling
+          if (err.code === '23505') {
+            get().setError('Bu isimde bir personel zaten mevcut.');
+          } else if (err.code === 'PGRST116') {
+            get().setError('Veritabanı bağlantı hatası. Lütfen tekrar deneyin.');
+          } else {
+            get().setError(`Personel eklenirken hata oluştu: ${err.message || err}`);
+          }
         }
       },
       
@@ -578,20 +694,19 @@ export const useAppStore = create<AppState>()(
       // Transaction actions
       addTransaction: async (transactionData) => {
         try {
-          const transaction: Transaction = {
-            ...transactionData,
-            id: generateId(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          set((state) => ({ transactions: [...state.transactions, transaction] }));
+          // Önce Supabase'e kaydet
+          const savedTransaction = await supabaseService.addTransaction(transactionData);
+          
+          // Sonra local state'e ekle
+          set((state) => ({ transactions: [...state.transactions, savedTransaction] }));
           
           // Eğer gelir transaction'ı ise ve fatura ile ilişkiliyse otomatik ödeme kontrolü yap
-          if (transaction.type === 'income' && transaction.clientId && transaction.description.includes('Fatura:')) {
-            await get().processPaymentFromTransaction(transaction.id);
+          if (savedTransaction.type === 'income' && savedTransaction.clientId && savedTransaction.description.includes('Fatura:')) {
+            await get().processPaymentFromTransaction(savedTransaction.id);
           }
         } catch (err) {
-          get().setError('Failed to add transaction.');
+          console.error('Error adding transaction:', err);
+          get().setError('Transaction eklenirken hata oluştu.');
         }
       },
       

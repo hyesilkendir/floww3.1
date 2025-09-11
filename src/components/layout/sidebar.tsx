@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/lib/store';
+import { createClient } from '@/utils/supabase/client';
 import {
   LayoutDashboard,
   Users,
@@ -23,6 +24,7 @@ import {
   X,
   LogOut,
   Wallet,
+  BarChart3,
 } from 'lucide-react';
 
 const navigationItems = [
@@ -30,6 +32,11 @@ const navigationItems = [
     title: 'Ana Sayfa',
     href: '/dashboard',
     icon: LayoutDashboard,
+  },
+  {
+    title: 'Analiz & Raporlar',
+    href: '/analiz',
+    icon: BarChart3,
   },
   {
     title: 'Cari Hesaplar',
@@ -87,9 +94,17 @@ export function Sidebar() {
   const pathname = usePathname();
   const { theme, setTheme, sidebarOpen, setSidebarOpen, logout, user, companySettings } = useAppStore();
 
-  const handleLogout = () => {
-    logout();
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      logout(); // Local state temizle
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Hata olsa bile login'e yönlendir
+      window.location.href = '/login';
+    }
   };
 
   return (

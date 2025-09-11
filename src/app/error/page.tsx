@@ -7,15 +7,23 @@ export default function ErrorPage() {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-4">Hata Oluştu</h1>
           <p className="text-gray-600 mb-6">
-            Kimlik doğrulama işlemi sırasında bir hata oluştu. 
-            Lütfen e-posta adresinizi kontrol edin ve tekrar deneyin.
+            Uygulama yüklenirken bir hata oluştu. 
+            Lütfen sayfayı yeniden yükleyin.
           </p>
-          <a 
-            href="/login" 
-            className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
-          >
-            Giriş Sayfasına Dön
-          </a>
+          <div className="space-y-3">
+            <button 
+              onClick={() => window.location.reload()}
+              className="block w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+            >
+              Sayfayı Yenile
+            </button>
+            <a 
+              href="/login" 
+              className="block w-full bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors text-center"
+            >
+              Giriş Sayfasına Dön
+            </a>
+          </div>
         </div>
       </div>
     </div>

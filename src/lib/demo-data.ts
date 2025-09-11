@@ -3,6 +3,14 @@ import { addDays } from 'date-fns';
 
 export const createDemoData = () => {
   const store = useAppStore.getState();
+  const currentUser = store.user;
+  
+  if (!currentUser) {
+    console.error('Demo data oluşturulamıyor: Kullanıcı girişi yapılmamış');
+    return;
+  }
+  
+  const userId = currentUser.id;
 
   // Demo Client
   const demoClient = {
@@ -17,7 +25,7 @@ export const createDemoData = () => {
     currencyId: '1',
     balance: 0,
     isActive: true,
-    userId: '1',
+    userId: userId,
   };
 
   // Demo Employee
@@ -29,7 +37,7 @@ export const createDemoData = () => {
     payrollPeriod: 'monthly' as const,
     paymentDay: 5,
     isActive: true,
-    userId: '1',
+    userId: userId,
   };
 
   // Demo Quote (Normal)
@@ -51,7 +59,7 @@ export const createDemoData = () => {
 • Ek revizyon talepleri için saatlik ücretlendirme yapılacaktır.
 • Hosting ve domain maliyetleri dahil değildir.
 • Teslim sonrası 3 ay ücretsiz teknik destek verilecektir.`,
-    userId: '1',
+    userId: userId,
   };
 
   // Demo Quote (Tevkifatlı)
@@ -75,7 +83,7 @@ export const createDemoData = () => {
     tevkifatRate: '7/10',
     tevkifatAmount: 3780, // 5400 * 7/10
     netAmountAfterTevkifat: 31620, // 35400 - 3780
-    userId: '1',
+    userId: userId,
   };
 
   // Create demo data
@@ -104,7 +112,7 @@ export const createDemoData = () => {
     isVatIncluded: true,
     vatRate: 18,
     isRecurring: false,
-    userId: '1',
+    userId: userId,
   });
 
   store.addTransaction({
@@ -117,7 +125,7 @@ export const createDemoData = () => {
     isVatIncluded: true,
     vatRate: 18,
     isRecurring: false,
-    userId: '1',
+    userId: userId,
   });
 
   // Demo Cash Accounts
@@ -127,7 +135,7 @@ export const createDemoData = () => {
     balance: 50000,
     isDefault: true,
     isActive: true,
-    userId: '1',
+    userId: userId,
   });
 
   store.addCashAccount({
@@ -136,7 +144,7 @@ export const createDemoData = () => {
     balance: 2000,
     isDefault: false,
     isActive: true,
-    userId: '1',
+    userId: userId,
   });
 
   store.addCashAccount({
@@ -145,7 +153,7 @@ export const createDemoData = () => {
     balance: 150000,
     isDefault: false,
     isActive: true,
-    userId: '1',
+    userId: userId,
   });
 
   // Demo debts
@@ -157,7 +165,7 @@ export const createDemoData = () => {
     type: 'payable',
     status: 'pending',
     description: 'Aylık kredi kartı ödemesi',
-    userId: '1',
+    userId: userId,
   });
 
   // Demo receivable debts (yaklaşan gelirler)
@@ -169,7 +177,7 @@ export const createDemoData = () => {
     type: 'receivable',
     status: 'pending',
     description: 'Web tasarım projesi bakiye ödemesi',
-    userId: '1',
+    userId: userId,
   });
 
   store.addDebt({
@@ -180,7 +188,7 @@ export const createDemoData = () => {
     type: 'receivable',
     status: 'pending',
     description: 'Logo tasarım projesi ödemesi',
-    userId: '1',
+    userId: userId,
   });
 
   store.addDebt({
@@ -191,7 +199,7 @@ export const createDemoData = () => {
     type: 'receivable',
     status: 'pending',
     description: 'Aylık sosyal medya yönetimi hizmeti',
-    userId: '1',
+    userId: userId,
   });
 
   console.log('Demo veriler oluşturuldu!');
