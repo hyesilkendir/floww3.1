@@ -229,6 +229,8 @@ export class SupabaseService {
   }
 
   async deleteEmployee(id: string): Promise<void> {
+    // Cascade silme: regular_payments.employee_id ON DELETE CASCADE ile gider
+    // Ek olarak, bu employee'a bağlı bekleyen düzenli ödemeleri manuel temizlik (gerekirse)
     const { error } = await this.supabase.from('employees').delete().eq('id', id);
     if (error) throw error;
   }
@@ -621,6 +623,7 @@ export class SupabaseService {
       category: item.category,
       status: item.status,
       description: item.description,
+      employeeId: item.employee_id || null,
       userId: item.user_id,
       createdAt: new Date(item.created_at),
       updatedAt: new Date(item.updated_at)
@@ -637,6 +640,7 @@ export class SupabaseService {
       category: payment.category,
       status: payment.status,
       description: payment.description || null,
+      employee_id: this.toUuidOrNull((payment as any).employeeId),
       user_id: payment.userId
     };
 
@@ -658,6 +662,7 @@ export class SupabaseService {
       category: data.category,
       status: data.status,
       description: data.description,
+      employeeId: data.employee_id || null,
       userId: data.user_id,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at)
@@ -866,6 +871,7 @@ export class SupabaseService {
               category: 'other',
               status: 'pending',
               description: `${employee.position} pozisyonundaki ${employee.name} için maaş ödemesi`,
+              employeeId: employee.id,
               userId: userId
             });
           }

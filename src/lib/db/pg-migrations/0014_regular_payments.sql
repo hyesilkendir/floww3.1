@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS regular_payments (
     category TEXT NOT NULL CHECK (category IN ('loan', 'installment', 'rent', 'utilities', 'food', 'insurance', 'other')),
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid')),
     description TEXT,
+    employee_id UUID NULL,
     user_id UUID NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -22,6 +23,11 @@ FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 ALTER TABLE regular_payments 
 ADD CONSTRAINT fk_regular_payments_currency_id 
 FOREIGN KEY (currency_id) REFERENCES currencies(id) ON DELETE RESTRICT;
+
+-- Optional link to employees: cascade delete when employee removed
+ALTER TABLE regular_payments
+ADD CONSTRAINT fk_regular_payments_employee_id
+FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE;
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_regular_payments_user_id ON regular_payments(user_id);
