@@ -708,6 +708,96 @@ export class SupabaseService {
     }
   }
 
+  // Process recurring transactions (income/expense with is_recurring)
+  async processRecurringTransactions(userId: string): Promise<void> {
+    try {
+      const today = new Date();
+      const transactions = await this.getTransactions(userId);
+      const recurringParents = transactions.filter((t) => t.isRecurring && t.nextRecurringDate && t.nextRecurringDate <= today);
+
+      for (const parent of recurringParents) {
+        // Create a new child transaction occurrence
+        await this.addTransaction({
+          type: parent.type,
+          amount: parent.amount,
+          description: `${parent.description || ''} (Tekrar)`.trim(),
+          categoryId: parent.categoryId,
+          clientId: parent.clientId,
+          employeeId: parent.employeeId,
+          currencyId: parent.currencyId,
+          transactionDate: parent.nextRecurringDate,
+          isVatIncluded: parent.isVatIncluded,
+          vatRate: parent.vatRate,
+          isRecurring: false,
+          parentTransactionId: parent.id,
+          userId
+        });
+
+        // Calculate and set next occurrence date
+        const nextDate = this.calculateNextPaymentDate(parent.nextRecurringDate!, parent.recurringPeriod || 'monthly');
+        await this.supabase
+          .from('transactions')
+          .update({ next_recurring_date: this.toISODate(nextDate), updated_at: new Date().toISOString() })
+          .eq('id', parent.id);
+      }
+    } catch (error) {
+      console.error('Error processing recurring transactions:', error);
+      // Surface but don't throw to avoid blocking boot
+    }
+  }
+
+  // Process recurring invoices
+  async processRecurringInvoices(userId: string): Promise<void> {
+    try {
+      const invoices = await this.getInvoices(userId);
+      const today = new Date();
+      const parents = invoices.filter((inv) => inv.isRecurring && (inv.recurringMonths ?? 0) > 0);
+
+      for (const parent of parents) {
+        // Eğer vade/issue tarihi bugün veya geçtiyse yeni bir kopya üret
+        const anchorDate = parent.dueDate || parent.issueDate || today;
+        if (!anchorDate) continue;
+
+        const shouldSpawn = anchorDate <= today;
+        if (!shouldSpawn) continue;
+
+        // Yeni fatura (aynı kalemler, tarihleri ileri al)
+        const nextIssue = new Date((parent.issueDate || today).getTime());
+        nextIssue.setMonth(nextIssue.getMonth() + 1);
+        const nextDue = new Date((parent.dueDate || nextIssue).getTime());
+        nextDue.setMonth(nextDue.getMonth() + 1);
+
+        await this.addInvoice({
+          userId,
+          clientId: parent.clientId,
+          currencyId: parent.currencyId,
+          issueDate: nextIssue,
+          dueDate: nextDue,
+          description: parent.description,
+          items: parent.items,
+          invoiceNumber: undefined,
+          subtotal: parent.subtotal,
+          vatRate: parent.vatRate,
+          total: parent.total,
+          paidAmount: 0,
+          remainingAmount: parent.total,
+          status: 'pending',
+          isRecurring: false,
+          recurringMonths: null
+        });
+
+        // Parent'ın tekrar sayısını azalt (ay bazlı)
+        const left = Math.max((parent.recurringMonths ?? 1) - 1, 0);
+        await this.updateInvoice(parent.id, {
+          recurringMonths: left
+        });
+      }
+    } catch (error) {
+      console.error('Error processing recurring invoices:', error);
+      // Surface but don't throw
+    }
+  }
+
   private calculateNextPaymentDate(currentDate: Date, frequency: string): Date {
     const nextDate = new Date(currentDate);
     

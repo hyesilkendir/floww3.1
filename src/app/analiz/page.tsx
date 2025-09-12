@@ -111,7 +111,11 @@ export default function AnalizPage() {
         // Düzenli ödemeleri işle (otomatik tekrar eden)
         try {
           const { supabaseService } = await import('@/lib/supabase-service');
-          await supabaseService.processRecurringPayments(user.id);
+          await Promise.all([
+            supabaseService.processRecurringPayments(user.id),
+            supabaseService.processRecurringTransactions(user.id),
+            supabaseService.processRecurringInvoices(user.id)
+          ]);
         } catch (error) {
           console.error('Error processing recurring payments:', error);
         }
