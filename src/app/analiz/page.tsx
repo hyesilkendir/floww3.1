@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isAfter, isBefore, addDays, subDays, addMonths } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 
 export default function AnalizPage() {
   // Auth states
@@ -107,6 +107,14 @@ export default function AnalizPage() {
         
         // Kullanıcı verilerini Supabase'den yükle
         await loadUserData(user.id);
+        
+        // Düzenli ödemeleri işle (otomatik tekrar eden)
+        try {
+          const { supabaseService } = await import('@/lib/supabase-service');
+          await supabaseService.processRecurringPayments(user.id);
+        } catch (error) {
+          console.error('Error processing recurring payments:', error);
+        }
         
         setIsLoading(false);
       } catch (error) {
@@ -216,19 +224,46 @@ export default function AnalizPage() {
       .reduce((sum, t) => sum + t.amount, 0);
   }, [transactions]);
 
-  // Yaklaşan borçlar (30 gün içinde)
+  // Yaklaşan borçlar (30 gün içinde) - düzenli ödemelerden oluştur
   const upcomingDebts = useMemo(() => {
     const next30Days = addDays(new Date(), 30);
+    const today = new Date();
     
-    return debts
+    // Düzenli ödemeleri borç olarak göster
+    const regularPaymentDebts = regularPayments
+      .filter(p => 
+        p.status === 'pending' && 
+        isAfter(new Date(p.dueDate), today) &&
+        isBefore(new Date(p.dueDate), next30Days)
+      )
+      .map(p => ({
+        id: p.id,
+        title: p.title,
+        amount: p.amount,
+        dueDate: p.dueDate,
+        status: p.status as 'pending' | 'paid' | 'overdue',
+        type: 'payable' as 'payable' | 'receivable',
+        description: p.description,
+        clientId: undefined,
+        currencyId: p.currencyId,
+        userId: p.userId,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt
+      }));
+    
+    // Gerçek borçları da ekle
+    const realDebts = debts
       .filter(d => 
         d.status === 'pending' && 
-        isAfter(new Date(d.dueDate), new Date()) &&
+        d.type === 'payable' &&
+        isAfter(new Date(d.dueDate), today) &&
         isBefore(new Date(d.dueDate), next30Days)
-      )
+      );
+    
+    return [...regularPaymentDebts, ...realDebts]
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
       .slice(0, 5);
-  }, [debts]);
+  }, [debts, regularPayments]);
 
   // Yaklaşan gelirler (30 gün içinde)
   const upcomingIncomes = useMemo(() => {
@@ -307,7 +342,15 @@ export default function AnalizPage() {
         .filter(b => format(new Date(b.paymentDate), 'yyyy-MM-dd') === dateStr)
         .reduce((sum, b) => sum + b.amount, 0);
 
-      const totalDayExpense = dayExpense + dayBonusExpense;
+      // Bu günki düzenli ödemeleri de ekle (gelecek tarihli borçlar)
+      const dayRegularPayments = regularPayments
+        .filter(p => 
+          p.status === 'pending' && 
+          format(new Date(p.dueDate), 'yyyy-MM-dd') === dateStr
+        )
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      const totalDayExpense = dayExpense + dayBonusExpense + dayRegularPayments;
       
       data.push({
         date: format(date, totalDays <= 14 ? 'dd MMM' : 'dd/MM'),
@@ -319,7 +362,33 @@ export default function AnalizPage() {
     }
     
     return data;
-  }, [transactions, bonuses, chartDateRange]);
+  }, [transactions, bonuses, regularPayments, chartDateRange]);
+
+  // Cari bazında ciro dağılımı (pasta grafiği için)
+  const clientRevenueData = useMemo(() => {
+    const clientRevenues = new Map<string, { name: string; value: number; color: string }>();
+    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff00', '#ff00ff', '#00ffff'];
+    
+    transactions
+      .filter(t => t.type === 'income' && t.clientId)
+      .forEach(transaction => {
+        const client = clients.find(c => c.id === transaction.clientId);
+        const clientName = client?.name || 'Bilinmeyen Cari';
+        
+        if (clientRevenues.has(clientName)) {
+          clientRevenues.get(clientName)!.value += transaction.amount;
+        } else {
+          const colorIndex = clientRevenues.size % colors.length;
+          clientRevenues.set(clientName, {
+            name: clientName,
+            value: transaction.amount,
+            color: colors[colorIndex]
+          });
+        }
+      });
+    
+    return Array.from(clientRevenues.values()).sort((a, b) => b.value - a.value);
+  }, [transactions, clients]);
 
   // Para formatı
   const formatCurrency = (amount: number) => {
@@ -661,6 +730,47 @@ export default function AnalizPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Cari Bazında Ciro Dağılımı - Pasta Grafiği */}
+        {showAmounts && clientRevenueData.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-green-500" />
+                Cari Bazında Ciro Dağılımı
+              </CardTitle>
+              <CardDescription>Müşterilere göre gelir dağılımı</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={clientRevenueData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {clientRevenueData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => [
+                        `${value.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL`,
+                        'Ciro'
+                      ]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Alt bölümler devam */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

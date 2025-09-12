@@ -429,6 +429,7 @@ export const useAppStore = create<AppState>()(
             categories: data.categories.length > 0 ? data.categories : defaultCategories,
             debts: data.debts,
             currencies: data.currencies.length > 0 ? data.currencies : defaultCurrencies,
+            regularPayments: data.regularPayments || [],
             invoices: invoices as any,
             companySettings: (settings as any) || get().companySettings,
             loading: false
@@ -1126,15 +1127,22 @@ export const useAppStore = create<AppState>()(
       // Regular payments actions
       addRegularPayment: async (paymentData) => {
         try {
-          const payment: RegularPayment = {
+          set({ loading: true, error: null });
+          const user = get().user;
+          if (!user) throw new Error('Kullanıcı girişi gerekli.');
+          
+          const newPayment = await supabaseService.addRegularPayment({
             ...paymentData,
-            id: generateId(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          set((state) => ({ regularPayments: [...state.regularPayments, payment] }));
+            userId: user.id
+          });
+          
+          set((state) => ({ 
+            regularPayments: [...state.regularPayments, newPayment],
+            loading: false
+          }));
         } catch (err) {
-          get().setError('Failed to add regular payment.');
+          console.error('Failed to add regular payment:', err);
+          set({ loading: false, error: `Düzenli ödeme eklenirken hata oluştu: ${err.message || err}` });
         }
       },
       updateRegularPayment: async (id, updates) => {

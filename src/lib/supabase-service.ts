@@ -602,25 +602,214 @@ export class SupabaseService {
     return [];
   }
 
+  // Regular Payments
+  async getRegularPayments(userId: string): Promise<RegularPayment[]> {
+    const { data, error } = await this.supabase
+      .from('regular_payments')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (error) throw error;
+    
+    return (data || []).map(item => ({
+      id: item.id,
+      title: item.title,
+      amount: parseFloat(item.amount) || 0,
+      currencyId: item.currency_id,
+      dueDate: new Date(item.due_date),
+      frequency: item.frequency,
+      category: item.category,
+      status: item.status,
+      description: item.description,
+      userId: item.user_id,
+      createdAt: new Date(item.created_at),
+      updatedAt: new Date(item.updated_at)
+    }));
+  }
+
+  async addRegularPayment(payment: Omit<RegularPayment, 'id' | 'createdAt' | 'updatedAt'>): Promise<RegularPayment> {
+    const paymentRecord = {
+      title: payment.title,
+      amount: payment.amount,
+      currency_id: payment.currencyId,
+      due_date: payment.dueDate.toISOString(),
+      frequency: payment.frequency,
+      category: payment.category,
+      status: payment.status,
+      description: payment.description || null,
+      user_id: payment.userId
+    };
+
+    const { data, error } = await this.supabase
+      .from('regular_payments')
+      .insert([paymentRecord])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    return {
+      id: data.id,
+      title: data.title,
+      amount: parseFloat(data.amount) || 0,
+      currencyId: data.currency_id,
+      dueDate: new Date(data.due_date),
+      frequency: data.frequency,
+      category: data.category,
+      status: data.status,
+      description: data.description,
+      userId: data.user_id,
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at)
+    };
+  }
+
+  // Process recurring regular payments
+  async processRecurringPayments(userId: string): Promise<void> {
+    try {
+      const today = new Date();
+      const regularPayments = await this.getRegularPayments(userId);
+      
+      for (const payment of regularPayments) {
+        // Eğer ödeme tarihi geçmişse ve pending durumundaysa
+        if (payment.status === 'pending' && payment.dueDate <= today) {
+          // Yeni bir transaction oluştur (gider olarak)
+          await this.addTransaction({
+            type: 'expense',
+            amount: payment.amount,
+            description: `${payment.title} - Düzenli Ödeme`,
+            categoryId: null, // Varsayılan kategori
+            clientId: null,
+            employeeId: null,
+            currencyId: payment.currencyId,
+            transactionDate: payment.dueDate,
+            isVatIncluded: false,
+            vatRate: 0,
+            isRecurring: false,
+            userId: userId
+          });
+
+          // Bir sonraki ödeme tarihini hesapla
+          const nextDueDate = this.calculateNextPaymentDate(payment.dueDate, payment.frequency);
+          
+          // Regular payment'ı güncelle
+          await this.supabase
+            .from('regular_payments')
+            .update({ 
+              due_date: nextDueDate.toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', payment.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing recurring payments:', error);
+      throw error;
+    }
+  }
+
+  private calculateNextPaymentDate(currentDate: Date, frequency: string): Date {
+    const nextDate = new Date(currentDate);
+    
+    switch (frequency) {
+      case 'weekly':
+        nextDate.setDate(nextDate.getDate() + 7);
+        break;
+      case 'monthly':
+        nextDate.setMonth(nextDate.getMonth() + 1);
+        break;
+      case 'quarterly':
+        nextDate.setMonth(nextDate.getMonth() + 3);
+        break;
+      case 'yearly':
+        nextDate.setFullYear(nextDate.getFullYear() + 1);
+        break;
+      default:
+        nextDate.setMonth(nextDate.getMonth() + 1);
+    }
+    
+    return nextDate;
+  }
+
+  // Create regular payments from employees (salary payments)
+  async createEmployeeSalaryPayments(userId: string): Promise<void> {
+    try {
+      const employees = await this.getEmployees(userId);
+      const existingPayments = await this.getRegularPayments(userId);
+      
+      for (const employee of employees) {
+        if (employee.isActive && employee.netSalary > 0) {
+          // Check if salary payment already exists for this employee
+          const existingPayment = existingPayments.find(p => 
+            p.title.includes(employee.name) && p.category === 'other'
+          );
+          
+          if (!existingPayment) {
+            // Calculate next payment date based on payroll period
+            const today = new Date();
+            let nextPaymentDate = new Date();
+            
+            switch (employee.payrollPeriod) {
+              case 'weekly':
+                nextPaymentDate.setDate(today.getDate() + 7);
+                break;
+              case 'biweekly':
+                nextPaymentDate.setDate(today.getDate() + 14);
+                break;
+              case 'monthly':
+              default:
+                // Set to specific day of month
+                nextPaymentDate.setDate(employee.paymentDay || 5);
+                if (nextPaymentDate <= today) {
+                  nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+                }
+                break;
+            }
+            
+            // Create regular payment for salary
+            await this.addRegularPayment({
+              title: `${employee.name} - Maaş`,
+              amount: employee.netSalary,
+              currencyId: employee.currencyId,
+              dueDate: nextPaymentDate,
+              frequency: employee.payrollPeriod === 'biweekly' ? 'monthly' : employee.payrollPeriod,
+              category: 'other',
+              status: 'pending',
+              description: `${employee.position} pozisyonundaki ${employee.name} için maaş ödemesi`,
+              userId: userId
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error creating employee salary payments:', error);
+      // Don't throw - this is not critical
+    }
+  }
+
   // User data initialization
   async initializeUserData(userId: string) {
     try {
-      const [clients, employees, transactions, categories, currencies] = await Promise.all([
+      const [clients, employees, transactions, categories, currencies, regularPayments] = await Promise.all([
         this.getClients(userId),
         this.getEmployees(userId),
         this.getTransactions(userId),
         this.getCategories(userId),
-        // this.getDebts(userId), // DISABLED: debts table doesn't exist in clean schema
-        this.getCurrencies()
+        this.getCurrencies(),
+        this.getRegularPayments(userId).catch(() => []) // Fallback to empty array if table doesn't exist
       ]);
+
+      // Create salary payments for employees if they don't exist
+      await this.createEmployeeSalaryPayments(userId);
 
       return {
         clients,
         employees, 
         transactions,
         categories,
-        debts: [], // Empty array for now
-        currencies
+        debts: [], // Empty array for now - debts will be created from regular payments
+        currencies,
+        regularPayments
       };
     } catch (error) {
       console.error('Error initializing user data:', error);
