@@ -3,11 +3,20 @@ node_modules/
 .env*
 *.log
 .DS_Store
-
+shadcn-server/
 
 .vercel
 .env*.local
 
 .env.local
-   .env
-   .supabase
+.env
+.supabase
+
+# Build outputs
+dist/
+out/
+build/
+
+# Development files
+*.tsbuildinfo
+.cache/

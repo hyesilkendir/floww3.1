@@ -86,6 +86,19 @@ const nextConfig = {
         fs: false,
       };
     }
+    
+    // Exclude shadcn-server from compilation
+    config.externals = config.externals || [];
+    config.externals.push({
+      'shadcn-server': 'shadcn-server'
+    });
+    
+    // Ignore shadcn-server directory
+    config.module.rules.push({
+      test: /shadcn-server/,
+      use: 'ignore-loader'
+    });
+    
     return config;
   },
 
