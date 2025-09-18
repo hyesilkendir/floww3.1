@@ -33,12 +33,20 @@ export default function DebtsPage() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    amount: string;
+    currencyId: string;
+    dueDate: string;
+    type: 'payable' | 'receivable';
+    clientId: string;
+    description: string;
+  }>({
     title: '',
     amount: '',
     currencyId: '1',
     dueDate: '',
-    type: 'payable' as const,
+    type: 'payable',
     clientId: 'none',
     description: '',
   });
@@ -122,33 +130,43 @@ export default function DebtsPage() {
     setIsDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title.trim() || !formData.amount || !formData.dueDate) {
+    if (!formData.title.trim() || !formData.amount || !formData.dueDate || !user) {
+      console.error('Required fields missing or user not logged in');
       return;
     }
 
-    const debtData = {
-      title: formData.title,
-      amount: parseFloat(formData.amount),
-      currencyId: formData.currencyId,
-      dueDate: new Date(formData.dueDate),
-      type: formData.type,
-      status: 'pending' as const,
-      clientId: formData.clientId && formData.clientId !== 'none' ? formData.clientId : undefined,
-      description: formData.description || undefined,
-      userId: user?.id || 'admin-user-1',
-    };
+    try {
+      const debtData = {
+        title: formData.title,
+        amount: parseFloat(formData.amount),
+        currencyId: formData.currencyId,
+        dueDate: new Date(formData.dueDate),
+        type: formData.type,
+        status: 'pending' as const,
+        clientId: formData.clientId && formData.clientId !== 'none' ? formData.clientId : undefined,
+        description: formData.description || undefined,
+        userId: user.id,
+      };
 
-    if (editingDebt) {
-      updateDebt(editingDebt.id, debtData);
-    } else {
-      addDebt(debtData);
+      console.log('Submitting debt data:', debtData);
+
+      if (editingDebt) {
+        await updateDebt(editingDebt.id, debtData);
+        console.log('Debt updated successfully');
+      } else {
+        await addDebt(debtData);
+        console.log('Debt added successfully');
+      }
+
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error submitting debt:', error);
+      alert('Borç kaydedilemedi. Lütfen tekrar deneyin.');
     }
-
-    setIsDialogOpen(false);
-    resetForm();
   };
 
   const handleDelete = (debt: Debt) => {

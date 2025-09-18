@@ -39,7 +39,19 @@ export default function ExpensesPage() {
   const [clientFilter, setClientFilter] = useState('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    amount: string;
+    categoryId: string;
+    clientId: string;
+    employeeId: string;
+    cashAccountId: string;
+    description: string;
+    transactionDate: string;
+    isVatIncluded: boolean;
+    vatRate: string;
+    isRecurring: boolean;
+    recurringPeriod: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  }>({
     amount: '',
     categoryId: '',
     clientId: 'none',
@@ -50,7 +62,7 @@ export default function ExpensesPage() {
     isVatIncluded: false,
     vatRate: '18',
     isRecurring: false,
-    recurringPeriod: 'monthly' as const,
+    recurringPeriod: 'monthly',
   });
 
   // Filter transactions for expenses only
@@ -91,8 +103,37 @@ export default function ExpensesPage() {
     source: 'bonus' as const
   }));
 
-  // Tüm giderleri birleştir (transaction + bonus)
-  const allExpenses = [...expenseTransactions, ...bonusTransactions];
+  // Regular payments'ları transaction formatına çevir (sadece expense kategoriler için)
+  const regularExpenseTransactions = useAppStore.getState().regularPayments
+    .filter(rp => rp.category === 'other' || rp.status === 'pending') // Tüm düzenli ödemeler expense olarak sayılır
+    .map(rp => ({
+      id: `regular-${rp.id}`,
+      type: 'expense' as const,
+      amount: rp.amount,
+      currencyId: rp.currencyId,
+      categoryId: '1', // Ofis Giderleri kategorisi (regular payments genelde genel gider)
+      clientId: undefined,
+      employeeId: rp.employeeId,
+      cashAccountId: undefined,
+      description: `${rp.title} (Düzenli Ödeme) - ${rp.description || ''}`.trim(),
+      transactionDate: rp.dueDate,
+      isVatIncluded: false,
+      vatRate: 0,
+      isRecurring: true,
+      recurringPeriod: (rp.frequency === 'weekly' ? 'weekly' : 
+                       rp.frequency === 'monthly' ? 'monthly' :
+                       rp.frequency === 'quarterly' ? 'quarterly' :
+                       rp.frequency === 'yearly' ? 'yearly' : 
+                       rp.frequency === 'daily' ? 'daily' : 'monthly') as 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'daily',
+      parentTransactionId: undefined,
+      userId: rp.userId,
+      createdAt: rp.createdAt,
+      updatedAt: rp.updatedAt,
+      source: 'regular' as const
+    }));
+
+  // Tüm giderleri birleştir (transaction + bonus + regular payments)
+  const allExpenses = [...expenseTransactions, ...bonusTransactions, ...regularExpenseTransactions];
 
   // Apply filters
   const filteredTransactions = allExpenses.filter(transaction => {
@@ -194,7 +235,7 @@ export default function ExpensesPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.amount || !formData.categoryId || !formData.description.trim()) {
+    if (!formData.amount || !formData.categoryId || !formData.description.trim() || !user) {
       return;
     }
 
@@ -207,7 +248,7 @@ export default function ExpensesPage() {
     const transactionData = {
       type: 'expense' as const,
       amount,
-      currencyId: formData.currencyId || '1', // UI'de varsa kullan, yoksa service fallback
+      currencyId: '1', // Default TRY
       categoryId: formData.categoryId,
       clientId: formData.clientId && formData.clientId !== 'none' ? formData.clientId : undefined,
       employeeId: formData.employeeId && formData.employeeId !== 'none' ? formData.employeeId : undefined,
@@ -215,7 +256,7 @@ export default function ExpensesPage() {
         ? formData.cashAccountId 
         : defaultCashAccount?.id,
       description: formData.description,
-      transactionDate: formData.transactionDate || undefined,
+      transactionDate: new Date(formData.transactionDate),
       isVatIncluded: formData.isVatIncluded,
       vatRate,
       isRecurring: formData.isRecurring,
@@ -223,7 +264,7 @@ export default function ExpensesPage() {
       nextRecurringDate: formData.isRecurring && formData.transactionDate
         ? new Date(new Date(formData.transactionDate).getTime() + (30 * 24 * 60 * 60 * 1000))
         : undefined,
-      userId: user?.id,
+      userId: user.id,
     };
 
     if (editingTransaction) {

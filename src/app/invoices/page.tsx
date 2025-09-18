@@ -152,7 +152,8 @@ export default function InvoicesPage() {
       cancelled: { label: 'İptal', variant: 'outline' as const, icon: XCircle },
     };
     
-    const config = statusConfig[status];
+    // Güvenli erişim - eğer status tanımlı değilse draft olarak varsayalım
+    const config = statusConfig[status] || statusConfig.draft;
     const Icon = config.icon;
     
     return (
@@ -168,7 +169,7 @@ export default function InvoicesPage() {
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const existingCount = invoices.filter(inv => 
-      inv.invoiceNumber.startsWith(`FAT-${year}${month}`)
+      inv.invoiceNumber && inv.invoiceNumber.startsWith(`FAT-${year}${month}`)
     ).length;
     
     return `FAT-${year}${month}-${String(existingCount + 1).padStart(3, '0')}`;
@@ -250,7 +251,7 @@ export default function InvoicesPage() {
       contractEndDate: addDays(new Date(), 365),
       balance: 0,
       isActive: true,
-      userId: user?.id,
+      userId: user?.id || '',
     });
 
     // Yeni eklenen cariyi seç
@@ -268,11 +269,16 @@ export default function InvoicesPage() {
       return;
     }
 
+    if (!user?.id) {
+      alert('Kullanıcı girişi gerekli');
+      return;
+    }
+
     const invoiceData = {
       clientId: formData.clientId,
       invoiceNumber: formData.invoiceNumber || generateInvoiceNumber(),
-      issueDate: formData.issueDate || undefined,
-      dueDate: formData.dueDate || undefined,
+      issueDate: new Date(formData.issueDate),
+      dueDate: new Date(formData.dueDate),
       description: formData.description,
       items: formData.items,
       subtotal: calculations.subtotal,
@@ -291,7 +297,7 @@ export default function InvoicesPage() {
       paidAmount: 0,
       remainingAmount: calculations.netAmountAfterTevkifat,
       currencyId: formData.currencyId,
-      userId: user?.id,
+      userId: user.id,
     };
 
     if (editingInvoice) {
@@ -628,7 +634,17 @@ export default function InvoicesPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {companySettings?.tevkifatRates?.map((rate) => (
+                        {(companySettings?.tevkifatRates && companySettings.tevkifatRates.length > 0 ? 
+                          companySettings.tevkifatRates : 
+                          [
+                            { id: '1', code: '9/10', description: 'Makine ve teçhizat (%90)' },
+                            { id: '2', code: '7/10', description: 'Makine ve teçhizat (%70)' },
+                            { id: '3', code: '5/10', description: 'Gayrimenkul (%50)' },
+                            { id: '4', code: '3/10', description: 'Mimarlık ve mühendislik (%30)' },
+                            { id: '5', code: '2/10', description: 'Yazılım (%20)' },
+                            { id: '6', code: '1/2', description: 'Temizlik (%50)' }
+                          ]
+                        ).map((rate) => (
                           <SelectItem key={rate.id} value={rate.code}>
                             {rate.code} - {rate.description}
                           </SelectItem>

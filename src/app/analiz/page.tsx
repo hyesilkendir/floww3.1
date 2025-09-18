@@ -116,6 +116,8 @@ export default function AnalizPage() {
             supabaseService.processRecurringTransactions(user.id),
             supabaseService.processRecurringInvoices(user.id)
           ]);
+          // İşlem sonrası taze verileri yükle (yeni faturalar ve hareketler için)
+          await loadUserData(user.id);
         } catch (error) {
           console.error('Error processing recurring payments:', error);
         }
@@ -240,6 +242,12 @@ export default function AnalizPage() {
         isAfter(new Date(p.dueDate), today) &&
         isBefore(new Date(p.dueDate), next30Days)
       )
+      // Personel yoksa veya pasifse gösterme
+      .filter(p => {
+        if (!p.employeeId) return true; // serbest düzenli ödeme
+        const emp = employees.find(e => e.id === p.employeeId);
+        return !!emp && emp.isActive;
+      })
       .map(p => ({
         id: p.id,
         title: p.title,
@@ -267,7 +275,7 @@ export default function AnalizPage() {
     return [...regularPaymentDebts, ...realDebts]
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
       .slice(0, 5);
-  }, [debts, regularPayments]);
+  }, [debts, regularPayments, employees]);
 
   // Yaklaşan gelirler (30 gün içinde)
   const upcomingIncomes = useMemo(() => {
@@ -716,7 +724,15 @@ export default function AnalizPage() {
                 <p className="text-gray-500 text-center py-4">Yaklaşan düzenli ödeme bulunamadı</p>
               ) : (
                 <div className="space-y-3">
-                  {regularPayments.slice(0, 5).map((payment) => (
+                  {regularPayments
+                    // Personel yoksa veya pasifse gösterme
+                    .filter(p => {
+                      if (!p.employeeId) return true;
+                      const emp = employees.find(e => e.id === p.employeeId);
+                      return !!emp && emp.isActive;
+                    })
+                    .slice(0, 5)
+                    .map((payment) => (
                     <div key={payment.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                       <div>
                         <p className="font-medium">{payment.title}</p>

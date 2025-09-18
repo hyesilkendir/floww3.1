@@ -220,6 +220,7 @@ export interface RegularPayment {
   category: 'loan' | 'installment' | 'rent' | 'utilities' | 'food' | 'insurance' | 'other';
   status: 'pending' | 'paid';
   description?: string;
+  employeeId?: string; // Çalışan maaş ödemeleri için
   userId: string;
   createdAt: Date;
   updatedAt: Date;

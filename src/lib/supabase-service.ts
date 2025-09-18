@@ -15,6 +15,11 @@ import type {
 
 export class SupabaseService {
   private supabase = createClient();
+  
+  // Public getter for direct access when needed
+  get supabaseClient() {
+    return this.supabase;
+  }
 
   private isUuid(value: any): boolean {
     if (!value || typeof value !== 'string') return false;
@@ -386,12 +391,23 @@ export class SupabaseService {
       invoice_number: invoice.invoiceNumber || null,
       net_amount: Number(invoice.subtotal ?? invoice.netAmount) || 0,
       vat_rate: Number(invoice.vatRate) || 0,
+      vat_amount: Number(invoice.vatAmount) || 0,
       total_amount: Number(invoice.total ?? invoice.totalAmount) || 0,
       paid_amount: Number(invoice.paidAmount) || 0,
       remaining_amount: Number(invoice.remainingAmount ?? ((invoice.total ?? 0) - (invoice.paidAmount ?? 0))) || 0,
       status: invoice.status || 'pending',
       is_recurring: !!invoice.isRecurring,
       recurring_months: invoice.recurringMonths || null,
+      recurring_period: invoice.recurringPeriod || null,
+      parent_invoice_id: this.toUuidOrNull(invoice.parentInvoiceId),
+      recurring_index: invoice.recurringIndex || null,
+      notes: invoice.notes || null,
+      // Tevkifat alanları
+      tevkifat_applied: !!invoice.tevkifatApplied,
+      tevkifat_rate: invoice.tevkifatApplied ? invoice.tevkifatRate : null,
+      tevkifat_amount: Number(invoice.tevkifatAmount) || 0,
+      net_amount_after_tevkifat: Number(invoice.netAmountAfterTevkifat) || 0,
+      payment_date: invoice.paymentDate ? this.toISODate(invoice.paymentDate) : null,
     };
 
     // Fallback currency when not provided
@@ -419,14 +435,22 @@ export class SupabaseService {
       invoiceNumber: data.invoice_number,
       subtotal: Number(data.net_amount) || 0,
       vatRate: Number(data.vat_rate) || 0,
+      vatAmount: Number(data.vat_amount) || 0,
       total: Number(data.total_amount) || 0,
       paidAmount: Number(data.paid_amount) || 0,
       remainingAmount: Number(data.remaining_amount) || 0,
       status: data.status,
       isRecurring: !!data.is_recurring,
       recurringMonths: data.recurring_months || null,
-      issueDate: new Date(data.issue_date),
-      dueDate: new Date(data.due_date),
+      recurringPeriod: data.recurring_period || null,
+      parentInvoiceId: data.parent_invoice_id || null,
+      recurringIndex: data.recurring_index || null,
+      notes: data.notes || null,
+      tevkifatApplied: !!data.tevkifat_applied,
+      tevkifatRate: data.tevkifat_rate || null,
+      tevkifatAmount: Number(data.tevkifat_amount) || 0,
+      netAmountAfterTevkifat: Number(data.net_amount_after_tevkifat) || 0,
+      paymentDate: data.payment_date ? new Date(data.payment_date) : undefined,
       createdAt: data.created_at ? new Date(data.created_at) : undefined,
       updatedAt: data.updated_at ? new Date(data.updated_at) : undefined
     };
@@ -440,7 +464,8 @@ export class SupabaseService {
   async updateInvoice(id: string, updates: any): Promise<any> {
     const record: any = {};
     if (updates.clientId !== undefined) record.client_id = this.toUuidOrNull(updates.clientId);
-    if (updates.currencyId !== undefined) record.currency_id = this.toUuidOrNull(updates.currencyId);
+    // currencies.id is text in current schema; don't coerce to UUID
+    if (updates.currencyId !== undefined) record.currency_id = updates.currencyId;
     if (updates.issueDate !== undefined) record.issue_date = this.toISODate(updates.issueDate);
     if (updates.dueDate !== undefined) record.due_date = this.toISODate(updates.dueDate);
     if (updates.invoiceNumber !== undefined) record.invoice_number = updates.invoiceNumber;
@@ -763,7 +788,10 @@ export class SupabaseService {
         const anchorDate = parent.dueDate || parent.issueDate || today;
         if (!anchorDate) continue;
 
-        const shouldSpawn = anchorDate <= today;
+        // İlk oluşturulduğu anda (parent.createdAt çok yeni) da bir kopya üret
+        const justCreatedWindowMs = 5 * 60 * 1000; // 5 dakika
+        const justCreated = parent.createdAt && (today.getTime() - parent.createdAt.getTime()) <= justCreatedWindowMs;
+        const shouldSpawn = anchorDate <= today || justCreated;
         if (!shouldSpawn) continue;
 
         // Yeni fatura (aynı kalemler, tarihleri ileri al)
@@ -883,6 +911,87 @@ export class SupabaseService {
     }
   }
 
+  // Process all recurring items using database functions
+  async processAllRecurringItems(userId?: string): Promise<void> {
+    try {
+      // Temporarily disabled - using manual processing instead
+      console.log('Processing recurring items manually for user:', userId);
+      
+      if (userId) {
+        // Manual processing as fallback
+        await this.processRecurringInvoices(userId);
+        await this.processRecurringPayments(userId);
+        await this.processRecurringTransactions(userId);
+      }
+    } catch (error) {
+      console.error('Error processing recurring items:', error);
+      // Don't throw - this is background processing
+    }
+  }
+
+  // User Profiles
+  async getUserProfile(userId: string): Promise<any | null> {
+    const { data, error } = await this.supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    if (error) throw error;
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      userId: data.user_id,
+      username: data.username,
+      name: data.name,
+      companyName: data.company_name,
+      avatarUrl: data.avatar_url,
+      phone: data.phone,
+      website: data.website,
+      bio: data.bio,
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at)
+    };
+  }
+
+  async updateUserProfile(userId: string, updates: any): Promise<any> {
+    const record: any = {
+      updated_at: new Date().toISOString()
+    };
+    
+    if (updates.username !== undefined) record.username = updates.username;
+    if (updates.name !== undefined) record.name = updates.name;
+    if (updates.companyName !== undefined) record.company_name = updates.companyName;
+    if (updates.avatarUrl !== undefined) record.avatar_url = updates.avatarUrl;
+    if (updates.phone !== undefined) record.phone = updates.phone;
+    if (updates.website !== undefined) record.website = updates.website;
+    if (updates.bio !== undefined) record.bio = updates.bio;
+
+    const { data, error } = await this.supabase
+      .from('user_profiles')
+      .update(record)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    return {
+      id: data.id,
+      userId: data.user_id,
+      username: data.username,
+      name: data.name,
+      companyName: data.company_name,
+      avatarUrl: data.avatar_url,
+      phone: data.phone,
+      website: data.website,
+      bio: data.bio,
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at)
+    };
+  }
+
   // User data initialization
   async initializeUserData(userId: string) {
     try {
@@ -897,6 +1006,9 @@ export class SupabaseService {
 
       // Create salary payments for employees if they don't exist
       await this.createEmployeeSalaryPayments(userId);
+
+      // Process any due recurring items
+      await this.processAllRecurringItems(userId);
 
       return {
         clients,

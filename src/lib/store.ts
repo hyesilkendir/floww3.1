@@ -422,12 +422,15 @@ export const useAppStore = create<AppState>()(
             supabaseService.getCompanySettings(userId).catch(() => null)
           ]);
           
+          // Debts'i ayrıca yükle çünkü initializeUserData'da boş döndürülüyor
+          const debts = await supabaseService.getDebts(userId).catch(() => []);
+          
           set({
             clients: data.clients,
             employees: data.employees,
             transactions: data.transactions,
             categories: data.categories.length > 0 ? data.categories : defaultCategories,
-            debts: data.debts,
+            debts: debts,
             currencies: data.currencies.length > 0 ? data.currencies : defaultCurrencies,
             regularPayments: data.regularPayments || [],
             invoices: invoices as any,
@@ -584,7 +587,7 @@ export const useAppStore = create<AppState>()(
             loading: false 
           }));
           console.log('Client added to local state');
-        } catch (err) {
+        } catch (err: any) {
           console.error('Error adding client:', err);
           set({ loading: false });
           
@@ -821,37 +824,123 @@ export const useAppStore = create<AppState>()(
       // Debt actions
       addDebt: async (debtData) => {
         try {
-          const debt: Debt = {
-            ...debtData,
-            id: generateId(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
+          const user = get().user;
+          if (!user) {
+            get().setError('Kullanıcı girişi gerekli.');
+            return;
+          }
+
+          set({ loading: true, error: null });
+          
+          // Direct Supabase insert with proper field mapping
+          const dbRecord = {
+            type: debtData.type,
+            title: debtData.title,
+            description: debtData.description || null,
+            amount: debtData.amount,
+            client_id: debtData.clientId || null,
+            currency_id: debtData.currencyId,
+            due_date: debtData.dueDate.toISOString().split('T')[0],
+            status: debtData.status,
+            user_id: user.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           };
-          set((state) => ({ debts: [...state.debts, debt] }));
-        } catch (err) {
-          get().setError('Failed to add debt.');
+
+          const { data: savedRecord, error } = await supabaseService.supabaseClient
+            .from('debts')
+            .insert(dbRecord)
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          // Map back to frontend format
+          const savedDebt = {
+            id: savedRecord.id,
+            type: savedRecord.type,
+            title: savedRecord.title,
+            description: savedRecord.description,
+            amount: savedRecord.amount,
+            clientId: savedRecord.client_id,
+            currencyId: savedRecord.currency_id,
+            dueDate: new Date(savedRecord.due_date),
+            status: savedRecord.status,
+            userId: savedRecord.user_id,
+            createdAt: new Date(savedRecord.created_at),
+            updatedAt: new Date(savedRecord.updated_at)
+          };
+          
+          // Local state'e ekle
+          set((state) => ({ 
+            debts: [...state.debts, savedDebt],
+            loading: false 
+          }));
+        } catch (err: any) {
+          console.error('Error adding debt:', err);
+          set({ loading: false });
+          get().setError(`Borç eklenirken hata oluştu: ${err.message || err}`);
         }
       },
       
       updateDebt: async (id, updates) => {
         try {
+          set({ loading: true, error: null });
+          
+          // Supabase'de güncelle
+          const updateRecord: any = {};
+          if (updates.type !== undefined) updateRecord.type = updates.type;
+          if (updates.title !== undefined) updateRecord.title = updates.title;
+          if (updates.description !== undefined) updateRecord.description = updates.description;
+          if (updates.amount !== undefined) updateRecord.amount = updates.amount;
+          if (updates.clientId !== undefined) updateRecord.client_id = updates.clientId;
+          if (updates.currencyId !== undefined) updateRecord.currency_id = updates.currencyId;
+          if (updates.dueDate !== undefined) updateRecord.due_date = updates.dueDate;
+          if (updates.status !== undefined) updateRecord.status = updates.status;
+          updateRecord.updated_at = new Date().toISOString();
+
+          const { error } = await supabaseService.supabaseClient
+            .from('debts')
+            .update(updateRecord)
+            .eq('id', id);
+          
+          if (error) throw error;
+          
+          // Local state'i güncelle
           set((state) => ({
             debts: state.debts.map((debt) =>
               debt.id === id ? { ...debt, ...updates, updatedAt: new Date() } : debt
             ),
+            loading: false
           }));
         } catch (err) {
-          get().setError('Failed to update debt.');
+          console.error('Error updating debt:', err);
+          set({ loading: false });
+          get().setError(`Borç güncellenirken hata oluştu: ${err.message || err}`);
         }
       },
       
       deleteDebt: async (id) => {
         try {
+          set({ loading: true, error: null });
+          
+          // Supabase'den sil
+          const { error } = await supabaseService.supabaseClient
+            .from('debts')
+            .delete()
+            .eq('id', id);
+          
+          if (error) throw error;
+          
+          // Local state'den sil
           set((state) => ({
             debts: state.debts.filter((debt) => debt.id !== id),
+            loading: false
           }));
-        } catch (err) {
-          get().setError('Failed to delete debt.');
+        } catch (err: any) {
+          console.error('Error deleting debt:', err);
+          set({ loading: false });
+          get().setError(`Borç silinirken hata oluştu: ${err.message || err}`);
         }
       },
       
@@ -923,8 +1012,117 @@ export const useAppStore = create<AppState>()(
         try {
           const user = get().user;
           if (!user) return;
+          
+          // Faturayı kaydet
           const saved = await supabaseService.addInvoice({ ...invoiceData, userId: user.id });
-          set((state) => ({ invoices: [...state.invoices, saved] }));
+          
+          // Client balance'ı güncelle (RPC fonksiyonu ile)
+          if (saved.clientId && saved.netAmountAfterTevkifat > 0) {
+            try {
+              // Yeni RPC fonksiyonu ile client balance'ı güncelle
+              const { data, error } = await supabaseService.supabase.rpc('update_client_balance', {
+                p_client_id: saved.clientId,
+                p_amount: saved.netAmountAfterTevkifat,
+                p_user_id: user.id
+              });
+              
+              if (error) {
+                console.error('RPC balance update error:', error);
+                throw error;
+              }
+              
+              if (data === true) {
+                console.log(`Client balance updated: +${saved.netAmountAfterTevkifat} for client ${saved.clientId}`);
+                
+                // Local state'deki client balance'ı da güncelle
+                set((state) => ({
+                  clients: state.clients.map(client => 
+                    client.id === saved.clientId 
+                      ? { ...client, balance: client.balance + saved.netAmountAfterTevkifat, updatedAt: new Date() }
+                      : client
+                  )
+                }));
+              } else {
+                console.warn('Client balance update returned false - client not found or no permission');
+              }
+            } catch (balanceError) {
+              console.error('Failed to update client balance:', balanceError);
+              
+              // Fallback: Direct update dene
+              try {
+                const { error } = await supabaseService.supabase
+                  .from('clients')
+                  .update({ 
+                    balance: saved.netAmountAfterTevkifat,
+                    updated_at: new Date().toISOString() 
+                  })
+                  .eq('id', saved.clientId)
+                  .eq('user_id', user.id);
+                
+                if (!error) {
+                  console.log('Client balance updated via direct update fallback');
+                  // Local state'i güncelle
+                  set((state) => ({
+                    clients: state.clients.map(client => 
+                      client.id === saved.clientId 
+                        ? { ...client, balance: client.balance + saved.netAmountAfterTevkifat, updatedAt: new Date() }
+                        : client
+                    )
+                  }));
+                }
+              } catch (fallbackError) {
+                console.error('Fallback balance update also failed:', fallbackError);
+              }
+            }
+          }
+          
+          // Fatura için otomatik alacak (receivable debt) oluştur
+          if (saved.status !== 'paid' && saved.clientId && saved.netAmountAfterTevkifat > 0) {
+            try {
+              const client = get().clients.find(c => c.id === saved.clientId);
+              const receivableDebt = {
+                type: 'receivable' as const,
+                title: `Fatura: ${saved.invoiceNumber}`,
+                description: saved.description || `${saved.invoiceNumber} numaralı fatura alacağı`,
+                amount: saved.netAmountAfterTevkifat,
+                clientId: saved.clientId,
+                currencyId: saved.currencyId,
+                dueDate: saved.dueDate,
+                status: 'pending' as const,
+                userId: user.id,
+                invoiceId: saved.id // İlişkilendirme için
+              };
+              
+              // Alacağı debts tablosuna ekle
+              await get().addDebt(receivableDebt);
+              console.log(`Auto-created receivable debt for invoice ${saved.invoiceNumber}: ${saved.netAmountAfterTevkifat} TL`);
+            } catch (debtError) {
+              console.error('Failed to create automatic receivable debt:', debtError);
+              // Fatura kayıtlı ama alacak oluşturulamadı - kritik değil, devam et
+            }
+          }
+          
+          // Pending balance oluştur (eski sistem ile uyumluluk için)
+          if (saved.status !== 'paid') {
+            const pendingBalance = {
+              id: `pb-${Date.now()}`,
+              clientId: saved.clientId,
+              invoiceId: saved.id,
+              amount: saved.netAmountAfterTevkifat,
+              dueDate: saved.dueDate,
+              description: `Fatura: ${saved.invoiceNumber}`,
+              status: 'pending' as const,
+              createdAt: new Date()
+            };
+            
+            set((state) => ({ 
+              invoices: [...state.invoices, saved],
+              pendingBalances: [...state.pendingBalances, pendingBalance]
+            }));
+          } else {
+            set((state) => ({ invoices: [...state.invoices, saved] }));
+          }
+          
         } catch (err) {
           console.error('Failed to add invoice:', err);
           get().setError('Failed to add invoice.');
@@ -1030,6 +1228,7 @@ export const useAppStore = create<AppState>()(
           
           const newInvoices: Invoice[] = [];
           const newPendingBalances: PendingBalance[] = [];
+          const user = get().user;
           
           for (let i = 1; i < parentInvoice.recurringMonths; i++) {
             // Oluşturulma tarihine göre hesapla
@@ -1076,6 +1275,31 @@ export const useAppStore = create<AppState>()(
               status: 'pending' as const,
               createdAt: new Date(),
             });
+            
+            // Her recurring invoice için otomatik alacak (receivable debt) oluştur
+            if (user && recurringInvoice.clientId && recurringInvoice.netAmountAfterTevkifat > 0) {
+              try {
+                const receivableDebt = {
+                  type: 'receivable' as const,
+                  title: `Fatura: ${recurringInvoice.invoiceNumber}`,
+                  description: `${recurringInvoice.invoiceNumber} numaralı tekrar eden fatura alacağı`,
+                  amount: recurringInvoice.netAmountAfterTevkifat,
+                  clientId: recurringInvoice.clientId,
+                  currencyId: recurringInvoice.currencyId,
+                  dueDate: recurringInvoice.dueDate,
+                  status: 'pending' as const,
+                  userId: user.id,
+                  invoiceId: recurringInvoice.id // İlişkilendirme için
+                };
+                
+                // Alacağı debts tablosuna ekle
+                await get().addDebt(receivableDebt);
+                console.log(`Auto-created receivable debt for recurring invoice ${recurringInvoice.invoiceNumber}: ${recurringInvoice.netAmountAfterTevkifat} TL`);
+              } catch (debtError) {
+                console.error('Failed to create automatic receivable debt for recurring invoice:', debtError);
+                // Kritik değil, devam et
+              }
+            }
           }
           
           // Invoice'ları ve pending balance'ları ekle
@@ -1140,7 +1364,7 @@ export const useAppStore = create<AppState>()(
             regularPayments: [...state.regularPayments, newPayment],
             loading: false
           }));
-        } catch (err) {
+        } catch (err: any) {
           console.error('Failed to add regular payment:', err);
           set({ loading: false, error: `Düzenli ödeme eklenirken hata oluştu: ${err.message || err}` });
         }
@@ -1188,6 +1412,7 @@ export const useAppStore = create<AppState>()(
                 link: '/debts',
                 date: d.dueDate,
                 createdAt: new Date(),
+                read: false,
               });
             });
 
@@ -1204,6 +1429,7 @@ export const useAppStore = create<AppState>()(
                 link: '/debts',
                 date: d.dueDate,
                 createdAt: new Date(),
+                read: false,
               });
             });
 
@@ -1235,6 +1461,7 @@ export const useAppStore = create<AppState>()(
                   link: '/regular-payments',
                   date: occ,
                   createdAt: new Date(),
+                  read: false,
                 });
               }
             });
@@ -1256,6 +1483,7 @@ export const useAppStore = create<AppState>()(
                   link: '/quotes',
                   date: ndate,
                   createdAt: new Date(),
+                  read: false,
                 });
               }
             });
