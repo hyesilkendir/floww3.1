@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { format, addDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { useAppStore } from '@/lib/store';
+import { useCleanStore } from '@/lib/clean-store';
 import { AuthLayout } from '@/components/layout/auth-layout';
 import type { Invoice, InvoiceItem, Client } from '@/lib/database-schema';
 import {
@@ -51,7 +51,7 @@ interface InvoiceFormData {
 }
 
 export default function InvoicesPage() {
-  const { 
+  const {
     invoices,
     clients,
     currencies,
@@ -61,8 +61,36 @@ export default function InvoicesPage() {
     deleteInvoice,
     markInvoiceAsPaid,
     addClient,
-    user 
-  } = useAppStore();
+    user,
+    loadUserData,
+    getCurrentUser,
+    isAuthenticated,
+    loading
+  } = useCleanStore();
+  
+  // DEBUG: Clients verilerini kontrol et
+  console.log('🔍 DEBUG: InvoicesPage render - clients:', clients);
+  console.log('🔍 DEBUG: InvoicesPage render - clients sayısı:', clients?.length || 0);
+  console.log('🔍 DEBUG: InvoicesPage render - user:', user);
+  console.log('🔍 DEBUG: InvoicesPage render - isAuthenticated:', isAuthenticated);
+  console.log('🔍 DEBUG: InvoicesPage render - loading:', loading);
+  
+  // Store hydration kontrolü ve otomatik data loading
+  React.useEffect(() => {
+    console.log('🔍 DEBUG: InvoicesPage useEffect - checking store state');
+    
+    // Eğer user var ama clients yok ise, data yükle
+    if (user && isAuthenticated && clients.length === 0 && !loading) {
+      console.log('🔍 DEBUG: InvoicesPage - Auto-loading user data');
+      loadUserData();
+    }
+    
+    // Eğer user yok ama authenticated ise, getCurrentUser çağır
+    if (!user && isAuthenticated && !loading) {
+      console.log('🔍 DEBUG: InvoicesPage - Auto-getting current user');
+      getCurrentUser();
+    }
+  }, [user, isAuthenticated, clients.length, loading, loadUserData, getCurrentUser]);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -86,7 +114,7 @@ export default function InvoicesPage() {
     isRecurring: false,
     recurringPeriod: 'monthly',
     recurringMonths: '12',
-    currencyId: '1',
+    currencyId: 'TRY',
   });
 
   const [quickClientData, setQuickClientData] = useState({
@@ -95,7 +123,7 @@ export default function InvoicesPage() {
     phone: '',
     address: '',
     taxNumber: '',
-    currencyId: '1',
+    currencyId: 'TRY',
   });
 
   // Form hesaplamaları
@@ -138,7 +166,7 @@ export default function InvoicesPage() {
   });
 
   const formatCurrency = (amount: number | undefined, currencyId?: string) => {
-    const currency = currencies.find(c => c.id === (currencyId || '1'));
+    const currency = currencies.find(c => c.id === (currencyId || 'TRY'));
     const safe = typeof amount === 'number' && isFinite(amount) ? amount : 0;
     return `${currency?.symbol || '₺'} ${safe.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
   };
@@ -225,7 +253,7 @@ export default function InvoicesPage() {
       isRecurring: false,
       recurringPeriod: 'monthly',
       recurringMonths: '12',
-      currencyId: '1',
+      currencyId: 'TRY',
     });
     setEditingInvoice(null);
   };
@@ -246,12 +274,12 @@ export default function InvoicesPage() {
 
     await addClient({
       ...quickClientData,
-      contactPerson: '',
-      contractStartDate: new Date(),
-      contractEndDate: addDays(new Date(), 365),
+      contact_person: '',
+      contract_start_date: new Date().toISOString().split('T')[0],
+      contract_end_date: addDays(new Date(), 365).toISOString().split('T')[0],
       balance: 0,
-      isActive: true,
-      userId: user?.id || '',
+      is_active: true,
+      currency_id: quickClientData.currencyId,
     });
 
     // Yeni eklenen cariyi seç
@@ -265,11 +293,18 @@ export default function InvoicesPage() {
   };
 
   const handleSubmit = async () => {
+    console.log('🔍 DEBUG: handleSubmit başladı');
+    console.log('🔍 DEBUG: formData:', formData);
+    console.log('🔍 DEBUG: user:', user);
+    console.log('🔍 DEBUG: calculations:', calculations);
+    
     if (!formData.clientId || !formData.description || formData.items.length === 0) {
+      console.log('🔍 DEBUG: Validation failed - missing required fields');
       return;
     }
 
     if (!user?.id) {
+      console.log('🔍 DEBUG: User ID missing');
       alert('Kullanıcı girişi gerekli');
       return;
     }
@@ -300,10 +335,21 @@ export default function InvoicesPage() {
       userId: user.id,
     };
 
-    if (editingInvoice) {
-      await updateInvoice(editingInvoice.id, invoiceData);
-    } else {
-      await addInvoice(invoiceData);
+    console.log('🔍 DEBUG: invoiceData hazırlandı:', invoiceData);
+
+    try {
+      if (editingInvoice) {
+        console.log('🔍 DEBUG: updateInvoice çağrılıyor...');
+        await updateInvoice(editingInvoice.id, invoiceData);
+      } else {
+        console.log('🔍 DEBUG: addInvoice çağrılıyor...');
+        await addInvoice(invoiceData);
+      }
+      console.log('🔍 DEBUG: Invoice işlemi başarılı');
+    } catch (error: any) {
+      console.error('🔍 DEBUG: Invoice işlemi hatası:', error);
+      alert(`Fatura eklenirken hata oluştu: ${error?.message || error}`);
+      return;
     }
 
     resetForm();
@@ -644,7 +690,7 @@ export default function InvoicesPage() {
                             { id: '5', code: '2/10', description: 'Yazılım (%20)' },
                             { id: '6', code: '1/2', description: 'Temizlik (%50)' }
                           ]
-                        ).map((rate) => (
+                        ).map((rate: any) => (
                           <SelectItem key={rate.id} value={rate.code}>
                             {rate.code} - {rate.description}
                           </SelectItem>

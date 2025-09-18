@@ -248,7 +248,7 @@ export default function ExpensesPage() {
     const transactionData = {
       type: 'expense' as const,
       amount,
-      currencyId: '1', // Default TRY
+      currencyId: 'TRY', // Default TRY
       categoryId: formData.categoryId,
       clientId: formData.clientId && formData.clientId !== 'none' ? formData.clientId : undefined,
       employeeId: formData.employeeId && formData.employeeId !== 'none' ? formData.employeeId : undefined,

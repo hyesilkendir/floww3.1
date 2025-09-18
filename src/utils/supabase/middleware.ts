@@ -33,7 +33,18 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
+    error: userError
   } = await supabase.auth.getUser()
+
+  // Debug logging for production issues
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 Middleware debug:', {
+      pathname: request.nextUrl.pathname,
+      hasUser: !!user,
+      userError: userError?.message,
+      userId: user?.id
+    });
+  }
 
   // Redirect unauthenticated users to login page
   if (
@@ -41,11 +52,17 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/login') &&
     !request.nextUrl.pathname.startsWith('/auth') &&
     !request.nextUrl.pathname.startsWith('/error') &&
+    !request.nextUrl.pathname.startsWith('/api') &&
     request.nextUrl.pathname !== '/'
   ) {
     // no user, redirect to login page
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Redirecting to login:', url.toString());
+    }
+    
     return NextResponse.redirect(url)
   }
 

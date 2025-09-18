@@ -1,7 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = 'https://ffqwomxrfvsjzpyeklvm.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmcXdvbXhyZnZzanpweWVrbHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MjQ4MzQsImV4cCI6MjA3MDQwMDgzNH0.omZjF-e8vkiHy0mdF5OISh7dUJxw0FRUGlPDdithDZM';
+const supabaseUrl = 'https://gjxlfeisaeojbgymehgf.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqeGxmZWlzYWVvamJneW1laGdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MzE4MTIsImV4cCI6MjA3MzUwNzgxMn0.bMCblgaWnkvzHDf1LwirPMRrSAypjt8EXVxr5a-Y9rE';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -10,9 +10,9 @@ async function testAuth() {
   
   try {
     // Test 1: Check existing user
-    console.log('\n1. Checking existing user test@gmail.com...');
+    console.log('\n1. Checking existing user test@example.com...');
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: 'test@gmail.com',
+      email: 'test@example.com',
       password: '123456'
     });
     
@@ -27,9 +27,9 @@ async function testAuth() {
       console.log('❌ Login failed:', signInError.message);
       
       // Test 2: Create the user if doesn't exist
-      console.log('\n2. Creating new user test@gmail.com...');
+      console.log('\n2. Creating new user test@example.com...');
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: 'test@gmail.com',
+        email: 'test@example.com',
         password: '123456',
         options: {
           data: {
@@ -52,7 +52,7 @@ async function testAuth() {
       // Test 3: Try login again
       console.log('\n3. Trying login again...');
       const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
-        email: 'test@gmail.com',
+        email: 'test@example.com',
         password: '123456'
       });
       

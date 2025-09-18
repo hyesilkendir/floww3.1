@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { createClient } from '@/utils/supabase/client';
 
 export default function LoginPage() {
@@ -15,7 +16,8 @@ export default function LoginPage() {
   // Login form
   const [loginData, setLoginData] = useState({
     email: '',
-    password: ''
+    password: '',
+    rememberMe: false
   });
   
   // Register form
@@ -34,6 +36,10 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
+      
+      // Session persistence ayarı
+      const sessionStorageType = loginData.rememberMe ? 'local' : 'session';
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email: loginData.email,
         password: loginData.password,
@@ -58,14 +64,26 @@ export default function LoginPage() {
       if (data.user) {
         console.log('✅ Login successful:', data.user.email);
         
-        // User'ı localStorage'a kaydet (uyumluluk için)
-        localStorage.setItem('user', JSON.stringify({
+        // User'ı storage'a kaydet - remember me'ye göre localStorage veya sessionStorage
+        const userData = {
           id: data.user.id,
           email: data.user.email,
           name: data.user.user_metadata?.name || data.user.email || 'Kullanıcı',
           username: data.user.user_metadata?.username || (data.user.email ? data.user.email.split('@')[0] : 'user'),
           company_name: data.user.user_metadata?.company_name || 'CALAF.CO'
-        }));
+        };
+        
+        if (loginData.rememberMe) {
+          localStorage.setItem('user', JSON.stringify(userData));
+          localStorage.setItem('rememberMe', 'true');
+          // Session storage'dan temizle
+          sessionStorage.removeItem('user');
+        } else {
+          sessionStorage.setItem('user', JSON.stringify(userData));
+          localStorage.removeItem('rememberMe');
+          // Local storage'dan temizle
+          localStorage.removeItem('user');
+        }
         
         // Başarılı giriş - dashboard sayfasına git
         window.location.href = '/dashboard';
@@ -104,10 +122,15 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
+      
+      // Production URL for email confirmation
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://floww3-1.vercel.app';
+      
       const { data, error } = await supabase.auth.signUp({
         email: registerData.email,
         password: registerData.password,
         options: {
+          emailRedirectTo: `${baseUrl}/auth/confirm`,
           data: {
             username: registerData.username,
             name: registerData.name,
@@ -120,11 +143,15 @@ export default function LoginPage() {
         console.error('Register error:', error);
         
         if (error.message.includes('already registered')) {
-          setError('Bu e-posta zaten kayıtlı');
+          setError('Bu e-posta zaten kayıtlı. Giriş yapmayı deneyin.');
         } else if (error.message.includes('Password should be')) {
           setError('Şifre en az 6 karakter olmalıdır');
         } else if (error.message.includes('Unable to validate email')) {
-          setError('Geçersiz e-posta adresi');
+          setError('Geçersiz e-posta adresi. Lütfen geçerli bir e-posta girin.');
+        } else if (error.message.includes('Database error')) {
+          setError('Veritabanı hatası. Lütfen daha sonra tekrar deneyin.');
+        } else if (error.message.includes('Email address')) {
+          setError('E-posta adresi geçersiz. Lütfen farklı bir e-posta deneyin.');
         } else {
           setError(`Kayıt hatası: ${error.message}`);
         }
@@ -150,7 +177,7 @@ export default function LoginPage() {
         // E-posta onayı gerekli
         setError('');
         setActiveTab('login');
-        alert('Kayıt başarılı! E-postanıza gelen doğrulama linkine tıklayın ve ardından giriş yapın.');
+        alert(`Kayıt başarılı! ${registerData.email} adresine gönderilen doğrulama linkine tıklayın ve ardından giriş yapın. E-posta gelmezse spam klasörünü kontrol edin.`);
       }
     } catch (err) {
       console.error('Register catch error:', err);
@@ -219,6 +246,23 @@ export default function LoginPage() {
                   required
                   disabled={isLoading}
                 />
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="login-remember-me"
+                    checked={loginData.rememberMe}
+                    onCheckedChange={(checked) =>
+                      setLoginData(prev => ({ ...prev, rememberMe: checked as boolean }))
+                    }
+                  />
+                  <label
+                    htmlFor="login-remember-me"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Beni hatırla
+                  </label>
+                </div>
+                
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
                 </Button>

@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { AuthLayout } from '@/components/layout/auth-layout';
-import { useAppStore } from '@/lib/store';
-import type { RegularPayment } from '@/lib/database-schema';
+import { useCleanStore } from '@/lib/clean-store';
+import type { RegularPayment } from '@/lib/clean-database-schema';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -15,15 +15,15 @@ import { tr } from 'date-fns/locale';
 import { Edit, Plus, Trash2 } from 'lucide-react';
 
 export default function RegularPaymentsPage() {
-  const { currencies, regularPayments, addRegularPayment, updateRegularPayment, deleteRegularPayment, user } = useAppStore();
+  const { currencies, regularPayments, addRegularPayment, updateRegularPayment, deleteRegularPayment, user } = useCleanStore();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editing, setEditing] = useState<RegularPayment | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     amount: '',
-    currencyId: '1',
-    dueDate: '',
+    currency_id: 'TRY',
+    due_date: '',
     frequency: 'monthly' as RegularPayment['frequency'],
     category: 'loan' as RegularPayment['category'],
     status: 'pending' as RegularPayment['status'],
@@ -32,7 +32,7 @@ export default function RegularPaymentsPage() {
 
   const openAdd = () => {
     setEditing(null);
-    setFormData({ title: '', amount: '', currencyId: '1', dueDate: '', frequency: 'monthly', category: 'loan', status: 'pending', description: '' });
+    setFormData({ title: '', amount: '', currency_id: 'TRY', due_date: '', frequency: 'monthly', category: 'loan', status: 'pending', description: '' });
     setIsDialogOpen(true);
   };
 
@@ -41,8 +41,8 @@ export default function RegularPaymentsPage() {
     setFormData({
       title: p.title,
       amount: p.amount.toString(),
-      currencyId: p.currencyId,
-      dueDate: format(p.dueDate, 'yyyy-MM-dd'),
+      currency_id: p.currency_id,
+      due_date: format(new Date(p.due_date), 'yyyy-MM-dd'),
       frequency: p.frequency,
       category: p.category,
       status: p.status,
@@ -53,19 +53,19 @@ export default function RegularPaymentsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title || !formData.amount || !formData.dueDate) return;
+    if (!formData.title || !formData.amount || !formData.due_date) return;
 
     const payload = {
       title: formData.title,
       amount: parseFloat(formData.amount),
-      currencyId: formData.currencyId,
-      dueDate: new Date(formData.dueDate),
+      currency_id: formData.currency_id,
+      due_date: formData.due_date,
       frequency: formData.frequency,
       category: formData.category,
       status: formData.status,
       description: formData.description || undefined,
-      userId: user?.id || 'admin-user-1',
-    } as Omit<RegularPayment, 'id' | 'createdAt' | 'updatedAt'>;
+      user_id: user?.id || 'admin-user-1',
+    } as Omit<RegularPayment, 'id' | 'created_at' | 'updated_at'>;
 
     if (editing) {
       updateRegularPayment(editing.id, payload);
@@ -128,7 +128,7 @@ export default function RegularPaymentsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="currency">Para Birimi</Label>
-                    <Select value={formData.currencyId} onValueChange={(value) => setFormData(prev => ({ ...prev, currencyId: value }))}>
+                    <Select value={formData.currency_id} onValueChange={(value) => setFormData(prev => ({ ...prev, currency_id: value }))}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -141,7 +141,7 @@ export default function RegularPaymentsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dueDate">İlk/Varsayılan Vade *</Label>
-                    <Input id="dueDate" type="date" value={formData.dueDate} onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))} required />
+                    <Input id="dueDate" type="date" value={formData.due_date} onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))} required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="frequency">Sıklık</Label>
@@ -198,7 +198,7 @@ export default function RegularPaymentsPage() {
               <div className="space-y-4">
                 {regularPayments
                   .slice()
-                  .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+                  .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
                   .map((p) => (
                   <div key={p.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
@@ -207,7 +207,7 @@ export default function RegularPaymentsPage() {
                         <span className="text-xs text-muted-foreground">{categoryLabels[p.category]} • {frequencyLabels[p.frequency]}</span>
                       </div>
                       <div className="text-sm text-muted-foreground mt-1">
-                        Vade: {format(p.dueDate, 'dd MMM yyyy', { locale: tr })}
+                        Vade: {format(new Date(p.due_date), 'dd MMM yyyy', { locale: tr })}
                       </div>
                       {p.description && (
                         <div className="text-sm text-muted-foreground mt-1">{p.description}</div>
@@ -215,7 +215,7 @@ export default function RegularPaymentsPage() {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className={`text-right ${p.status === 'pending' ? 'text-red-600' : 'text-green-600' } font-semibold`}>
-                        {formatCurrency(p.amount, p.currencyId)}
+                        {formatCurrency(p.amount, p.currency_id)}
                         <div className="text-xs text-muted-foreground">{p.status === 'pending' ? 'Bekliyor' : 'Ödendi'}</div>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => openEdit(p)}>

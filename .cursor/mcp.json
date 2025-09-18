@@ -1,19 +1,26 @@
 {
-    "mcpServers": {
-      "supabase": {
-        "command": "python",
-        "args": [
-          "-m",
-          "supabase_mcp_server",
-          "--project-ref",
-          "bbqcvtfzhqqjbyagxorc",
-          "--access-token",
-          "${SUPABASE_ACCESS_TOKEN}",
-          "--unsafe"
-        ],
-        "env": {
-          "SUPABASE_ACCESS_TOKEN": "sbp_b77ec7c85547a82809c479cd18a1d79d0e4ec82e"
-        }
+  "mcpServers": {
+    "supabase": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=ffqwomxrfvsjzpyeklvm",
+        "--access-token=${SUPABASE_ACCESS_TOKEN}"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_f46441126dd4772fa1feef5e7a27049e87eb3c6d"
       }
+    },
+    "vercel": {
+      "url": "https://mcp.vercel.com",
+      "headers": {}
+    },
+    "context7": {
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {}
     }
   }
+}

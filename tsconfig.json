@@ -1,32 +1,87 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "lib": ["dom", "dom.iterable", "es6"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
+    // Modern JavaScript target for better performance
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    
+    // Module system optimizations
     "module": "esnext",
     "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    
+    // Path resolution configuration
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/components/*": ["./src/components/*"],
+      "@/lib/*": ["./src/lib/*"],
+      "@/utils/*": ["./src/utils/*"],
+      "@/app/*": ["./src/app/*"],
+      "@/hooks/*": ["./src/hooks/*"],
+      "@/types/*": ["./src/types/*"],
+      "@/styles/*": ["./src/styles/*"],
+      "~/*": ["./src/*"]
+    },
+    
+    // JSON and file handling
+    "allowJs": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    
+    // Type checking strictness
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "exactOptionalPropertyTypes": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": false,
+    
+    // Build optimizations
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "incremental": true,
+    "isolatedModules": true,
+    
+    // JSX configuration
+    "jsx": "preserve",
+    "jsxImportSource": "react",
+    
+    // Advanced TypeScript features
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": false,
+    "allowArbitraryExtensions": false,
+    
+    // Performance optimizations
+    "downlevelIteration": true,
+    "importHelpers": true,
+    
+    // Next.js specific
     "plugins": [
       {
         "name": "next"
       }
-    ],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    ]
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "out",
+    "dist",
+    "build",
+    "shadcn-server-disabled",
+    "shadcn-server-disabled/**/*",
+    "**/*.js",
+    "**/*.jsx",
+    "*.config.js",
+    "*.config.ts",
+    ".cursor/**/*"
+  ]
 }

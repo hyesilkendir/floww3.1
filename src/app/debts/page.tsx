@@ -44,7 +44,7 @@ export default function DebtsPage() {
   }>({
     title: '',
     amount: '',
-    currencyId: '1',
+    currencyId: 'TRY',
     dueDate: '',
     type: 'payable',
     clientId: 'none',
@@ -102,7 +102,7 @@ export default function DebtsPage() {
     setFormData({
       title: '',
       amount: '',
-      currencyId: '1',
+      currencyId: 'TRY',
       dueDate: '',
       type: 'payable',
       clientId: 'none',

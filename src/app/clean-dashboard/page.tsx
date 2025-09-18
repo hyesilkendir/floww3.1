@@ -50,7 +50,7 @@ export default function CleanDashboardPage() {
     await addClient({
       name: 'Test Client ' + Date.now(),
       email: 'test@example.com',
-      currency_id: '1',
+      currency_id: 'TRY',
       balance: 0,
       is_active: true
     });
@@ -61,7 +61,7 @@ export default function CleanDashboardPage() {
       name: 'Test Employee ' + Date.now(),
       position: 'Developer',
       net_salary: 15000,
-      currency_id: '1',
+      currency_id: 'TRY',
       payroll_period: 'monthly',
       payment_day: 1,
       is_active: true
@@ -73,7 +73,7 @@ export default function CleanDashboardPage() {
       type: 'income',
       amount: 1000,
       description: 'Test transaction ' + Date.now(),
-      currency_id: '1',
+      currency_id: 'TRY',
       transaction_date: new Date().toISOString().split('T')[0],
       is_vat_included: false,
       vat_rate: 0,

@@ -174,7 +174,7 @@ export default function IncomePage() {
     const transactionData = {
       type: 'income' as const,
       amount,
-      currencyId: formData.currencyId || '1',
+      currencyId: formData.currencyId || 'TRY',
       categoryId: formData.categoryId,
       clientId: formData.clientId && formData.clientId !== 'none' ? formData.clientId : undefined,
       cashAccountId: formData.cashAccountId && formData.cashAccountId !== 'none' 

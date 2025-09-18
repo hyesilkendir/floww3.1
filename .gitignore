@@ -20,3 +20,4 @@ build/
 # Development files
 *.tsbuildinfo
 .cache/
+.vercel

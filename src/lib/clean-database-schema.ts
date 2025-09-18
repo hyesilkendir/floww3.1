@@ -63,6 +63,7 @@ export interface Transaction {
   client_id?: string;
   employee_id?: string;
   currency_id: string;
+  cash_account_id?: string; // References cash_accounts(id)
   transaction_date: string;
   is_vat_included: boolean;
   vat_rate: number;
@@ -84,4 +85,32 @@ export interface AuthUser {
     company_name?: string;
   };
   created_at: string;
+}
+
+export interface RegularPayment {
+  id: string;
+  title: string;
+  amount: number;
+  currency_id: string;
+  due_date: string;
+  frequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  category: 'loan' | 'installment' | 'rent' | 'utilities' | 'food' | 'insurance' | 'other';
+  status: 'pending' | 'paid';
+  description?: string;
+  employee_id?: string;
+  user_id: string; // References auth.users(id)
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashAccount {
+  id: string;
+  user_id: string; // References auth.users(id)
+  name: string;
+  currency_id: string; // References currencies(id)
+  balance: number;
+  is_default: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }

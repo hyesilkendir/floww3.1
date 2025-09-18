@@ -1,7 +1,7 @@
+
 'use client';
 
-import React from 'react';
-import { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Search, FileText, Download, Send, Edit, Trash2, Eye, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,25 +13,53 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { useAppStore } from '@/lib/store';
+import { useCleanStore } from '@/lib/clean-store';
 import { AuthLayout } from '@/components/layout/auth-layout';
-import type { Quote, QuoteItem } from '@/lib/database-schema';
+import type { Quote } from '@/lib/clean-supabase-service';
 import { format, addDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 export default function QuotesPage() {
-  const { 
-    quotes, 
-    currencies, 
+  const {
+    quotes,
+    currencies,
     clients,
-    addQuote, 
-    updateQuote, 
+    addQuote,
+    updateQuote,
     deleteQuote,
     user,
-    companySettings
-  } = useAppStore();
+    companySettings,
+    loadUserData,
+    getCurrentUser,
+    isAuthenticated,
+    loading
+  } = useCleanStore();
+  
+  // DEBUG: Clients verilerini kontrol et
+  console.log('🔍 DEBUG: QuotesPage render - clients:', clients);
+  console.log('🔍 DEBUG: QuotesPage render - clients sayısı:', clients?.length || 0);
+  console.log('🔍 DEBUG: QuotesPage render - user:', user);
+  console.log('🔍 DEBUG: QuotesPage render - isAuthenticated:', isAuthenticated);
+  console.log('🔍 DEBUG: QuotesPage render - loading:', loading);
+  
+  // Store hydration kontrolü ve otomatik data loading
+  React.useEffect(() => {
+    console.log('🔍 DEBUG: QuotesPage useEffect - checking store state');
+    
+    // Eğer user var ama clients yok ise, data yükle
+    if (user && isAuthenticated && clients.length === 0 && !loading) {
+      console.log('🔍 DEBUG: QuotesPage - Auto-loading user data');
+      loadUserData();
+    }
+    
+    // Eğer user yok ama authenticated ise, getCurrentUser çağır
+    if (!user && isAuthenticated && !loading) {
+      console.log('🔍 DEBUG: QuotesPage - Auto-getting current user');
+      getCurrentUser();
+    }
+  }, [user, isAuthenticated, clients.length, loading, loadUserData, getCurrentUser]);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -45,7 +73,7 @@ export default function QuotesPage() {
     clientId: '',
     title: '',
     validUntil: format(addDays(new Date(), 30), 'yyyy-MM-dd'), // 30 gün sonra
-    currencyId: '1',
+    currencyId: 'TRY',
     notes: '',
     termsAndConditions: `• Bu teklif {{validUntil}} tarihine kadar geçerlidir.
 • Proje başlangıcında %50 avans, teslimde %50 bakiye ödemesi yapılacaktır.
@@ -57,7 +85,7 @@ export default function QuotesPage() {
     tevkifatRate: '',
   });
 
-  const [quoteItems, setQuoteItems] = useState<Omit<QuoteItem, 'id' | 'quoteId'>[]>([
+  const [quoteItems, setQuoteItems] = useState([
     {
       description: '',
       quantity: 1,
@@ -70,11 +98,11 @@ export default function QuotesPage() {
 
   // Apply filters
   const filteredQuotes = quotes.filter(quote => {
-    // Search filter
-    const client = clients.find(c => c.id === quote.clientId);
-    const matchesSearch = 
-      quote.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      quote.quoteNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    // Search filter - Database field mapping
+    const client = clients.find(c => c.id === quote.client_id);
+    const matchesSearch =
+      (quote.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (quote.quote_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       client?.name.toLowerCase().includes(searchTerm.toLowerCase());
 
     if (!matchesSearch) return false;
@@ -92,14 +120,14 @@ export default function QuotesPage() {
 
   const getStatusBadge = (status: string) => {
     const statusMap = {
-      draft: { label: 'Taslak', className: 'bg-gray-100 text-gray-800' },
-      sent: { label: 'Gönderildi', className: 'bg-blue-100 text-blue-800' },
+      pending: { label: 'Bekliyor', className: 'bg-yellow-100 text-yellow-800' },
       accepted: { label: 'Kabul Edildi', className: 'bg-green-100 text-green-800' },
       rejected: { label: 'Reddedildi', className: 'bg-red-100 text-red-800' },
       expired: { label: 'Süresi Doldu', className: 'bg-orange-100 text-orange-800' },
+      converted: { label: 'Faturaya Çevrildi', className: 'bg-blue-100 text-blue-800' },
     };
     
-    const config = statusMap[status as keyof typeof statusMap] || statusMap.draft;
+    const config = statusMap[status as keyof typeof statusMap] || statusMap.pending;
     return <Badge className={config.className}>{config.label}</Badge>;
   };
 
@@ -131,7 +159,7 @@ export default function QuotesPage() {
     let netAmountAfterTevkifat = total;
     
     if (formData.tevkifatApplied && formData.tevkifatRate) {
-      const tevkifat = companySettings?.tevkifatRates?.find(rate => rate.code === formData.tevkifatRate);
+      const tevkifat = companySettings?.tevkifatRates?.find((rate: any) => rate.code === formData.tevkifatRate);
       if (tevkifat) {
         // Tevkifat sadece KDV tutarı üzerinden hesaplanır
         tevkifatAmount = vatAmount * (tevkifat.numerator / tevkifat.denominator);
@@ -147,7 +175,7 @@ export default function QuotesPage() {
       clientId: '',
       title: '',
       validUntil: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
-      currencyId: '1',
+      currencyId: 'TRY',
       notes: '',
       termsAndConditions: `• Bu teklif {{validUntil}} tarihine kadar geçerlidir.
 • Proje başlangıcında %50 avans, teslimde %50 bakiye ödemesi yapılacaktır.
@@ -171,7 +199,7 @@ export default function QuotesPage() {
     setEditingQuote(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.clientId || !formData.title.trim() || quoteItems.length === 0) {
@@ -180,44 +208,57 @@ export default function QuotesPage() {
 
     const totals = calculateQuoteTotals();
     
+    // Database field mapping için snake_case format
     const quoteData = {
-      clientId: formData.clientId,
-      quoteNumber: editingQuote?.quoteNumber || generateQuoteNumber(),
-      title: formData.title,
-      validUntil: new Date(formData.validUntil),
-      status: 'draft' as const,
-      subtotal: totals.subtotal,
-      vatAmount: totals.vatAmount,
-      total: totals.total,
-      currencyId: formData.currencyId,
-      notes: formData.notes || undefined,
-      termsAndConditions: formData.termsAndConditions || undefined,
+      client_id: formData.clientId,
+      quote_number: editingQuote?.quote_number || generateQuoteNumber(),
+      description: formData.title, // title -> description mapping
+      valid_until: formData.validUntil, // Date string format
+      status: 'pending' as const, // draft -> pending mapping
+      net_amount: totals.subtotal,
+      vat_rate: 18, // Default VAT rate
+      total_amount: totals.total,
+      currency_id: formData.currencyId,
+      items: JSON.stringify(quoteItems), // Store items as JSON
       // Tevkifat alanları
-      tevkifatApplied: formData.tevkifatApplied,
-      tevkifatRate: formData.tevkifatApplied ? formData.tevkifatRate : undefined,
-      tevkifatAmount: formData.tevkifatApplied ? totals.tevkifatAmount : undefined,
-      netAmountAfterTevkifat: formData.tevkifatApplied ? totals.netAmountAfterTevkifat : undefined,
-      userId: user?.id || 'admin-user-1',
+      withholding_tax_rate: formData.tevkifatApplied ?
+        (companySettings?.tevkifatRates?.find((rate: any) => rate.code === formData.tevkifatRate)?.numerator || 0) /
+        (companySettings?.tevkifatRates?.find((rate: any) => rate.code === formData.tevkifatRate)?.denominator || 1) * 100 : 0,
+      withholding_tax_amount: formData.tevkifatApplied ? totals.tevkifatAmount : 0,
+      issue_date: new Date().toISOString().split('T')[0], // Today's date
     };
 
-    if (editingQuote) {
-      updateQuote(editingQuote.id, quoteData);
-    } else {
-      addQuote(quoteData);
-    }
+    try {
+      if (editingQuote) {
+        await updateQuote(editingQuote.id, quoteData);
+      } else {
+        await addQuote(quoteData);
+      }
 
-    setIsDialogOpen(false);
-    resetForm();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Quote save error:', error);
+      // Error handling is done in the store
+    }
   };
 
-  const handleDelete = (quote: Quote) => {
-    if (confirm(`${quote.quoteNumber} numaralı teklifi silmek istediğinizden emin misiniz?`)) {
-      deleteQuote(quote.id);
+  const handleDelete = async (quote: Quote) => {
+    if (confirm(`${quote.quote_number} numaralı teklifi silmek istediğinizden emin misiniz?`)) {
+      try {
+        await deleteQuote(quote.id);
+      } catch (error) {
+        console.error('Quote delete error:', error);
+      }
     }
   };
 
-  const updateQuoteStatus = (quoteId: string, status: string) => {
-    updateQuote(quoteId, { status: status as any });
+  const updateQuoteStatus = async (quoteId: string, status: string) => {
+    try {
+      await updateQuote(quoteId, { status: status as any });
+    } catch (error) {
+      console.error('Quote status update error:', error);
+    }
   };
 
   const addQuoteItem = () => {
@@ -246,19 +287,24 @@ export default function QuotesPage() {
     }));
   };
 
-  const duplicateQuote = (quote: Quote) => {
+  const duplicateQuote = async (quote: Quote) => {
     const newQuote = {
       ...quote,
-      quoteNumber: generateQuoteNumber(),
-      status: 'draft' as const,
-      title: `${quote.title} (Kopya)`,
-      validUntil: addDays(new Date(), 30),
+      quote_number: generateQuoteNumber(),
+      status: 'pending' as const,
+      description: `${quote.description} (Kopya)`,
+      valid_until: addDays(new Date(), 30).toISOString().split('T')[0],
+      issue_date: new Date().toISOString().split('T')[0],
     };
     delete (newQuote as any).id;
-    delete (newQuote as any).createdAt;
-    delete (newQuote as any).updatedAt;
+    delete (newQuote as any).created_at;
+    delete (newQuote as any).updated_at;
     
-    addQuote(newQuote);
+    try {
+      await addQuote(newQuote);
+    } catch (error) {
+      console.error('Quote duplicate error:', error);
+    }
   };
 
   const openAddDialog = () => {
@@ -267,21 +313,34 @@ export default function QuotesPage() {
   };
 
   const openEditDialog = (quote: Quote) => {
+    // Parse items from JSON if available
+    let items = [];
+    try {
+      items = quote.items ? JSON.parse(quote.items) : [];
+    } catch (e) {
+      console.warn('Failed to parse quote items:', e);
+    }
+    
     setFormData({
-      clientId: quote.clientId,
-      title: quote.title,
-      validUntil: format(quote.validUntil, 'yyyy-MM-dd'),
-      currencyId: quote.currencyId,
-      notes: quote.notes || '',
-      termsAndConditions: quote.termsAndConditions || `• Bu teklif {{validUntil}} tarihine kadar geçerlidir.
+      clientId: quote.client_id,
+      title: quote.description || '',
+      validUntil: quote.valid_until,
+      currencyId: quote.currency_id,
+      notes: '',
+      termsAndConditions: `• Bu teklif {{validUntil}} tarihine kadar geçerlidir.
 • Proje başlangıcında %50 avans, teslimde %50 bakiye ödemesi yapılacaktır.
 • Proje süresi onaydan sonra başlayacaktır.
 • Ek revizyon talepleri için ayrıca ücretlendirme yapılacaktır.
 • Hosting ve domain hizmetleri dahil değildir.`,
       // Tevkifat alanları
-      tevkifatApplied: quote.tevkifatApplied || false,
-      tevkifatRate: quote.tevkifatRate || '',
+      tevkifatApplied: (quote.withholding_tax_rate || 0) > 0,
+      tevkifatRate: '', // Bu mapping daha karmaşık, şimdilik boş bırakıyoruz
     });
+    
+    if (items.length > 0) {
+      setQuoteItems(items);
+    }
+    
     setEditingQuote(quote);
     setIsDialogOpen(true);
   };
@@ -306,18 +365,14 @@ export default function QuotesPage() {
     pdfElement.style.lineHeight = '1.4';
     pdfElement.style.color = '#000000';
 
-    const client = clients.find(c => c.id === viewingQuote.clientId);
-    const { companySettings } = useAppStore.getState();
+    const client = clients.find(c => c.id === viewingQuote.client_id);
 
     pdfElement.innerHTML = `
       <div style="padding: 20mm; min-height: 277mm; box-sizing: border-box;">
         <!-- Header -->
         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px;">
           <div>
-            ${companySettings?.quoteLogo ? 
-              `<img src="${companySettings.quoteLogo}" alt="${companySettings.companyName}" style="max-height: 60px; margin-bottom: 10px;" />` : 
-              `<h1 style="margin: 0; font-size: 28px; font-weight: bold; color: #1e40af;">${companySettings?.companyName || 'CALAF.CO'}</h1>`
-            }
+            <h1 style="margin: 0; font-size: 28px; font-weight: bold; color: #1e40af;">${companySettings?.companyName || 'CALAF.CO'}</h1>
             <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">${companySettings?.address || 'İstanbul, Türkiye'}</p>
             <p style="margin: 2px 0 0 0; font-size: 12px; color: #666;">Tel: ${companySettings?.phone || '+90 212 555 0000'}</p>
             <p style="margin: 2px 0 0 0; font-size: 12px; color: #666;">${companySettings?.email || 'info@calaf.co'}</p>
@@ -325,9 +380,9 @@ export default function QuotesPage() {
           </div>
           <div style="text-align: right;">
             <h2 style="margin: 0; font-size: 24px; font-weight: bold; color: #dc2626;">TEKLİF</h2>
-            <p style="margin: 8px 0 0 0; font-family: monospace; font-size: 14px; font-weight: bold;">${viewingQuote.quoteNumber}</p>
-            <p style="margin: 8px 0 0 0; font-size: 12px;">Tarih: ${format(viewingQuote.createdAt, 'dd/MM/yyyy', { locale: tr })}</p>
-            <p style="margin: 2px 0 0 0; font-size: 12px;">Geçerlilik: ${format(viewingQuote.validUntil, 'dd/MM/yyyy', { locale: tr })}</p>
+            <p style="margin: 8px 0 0 0; font-family: monospace; font-size: 14px; font-weight: bold;">${viewingQuote.quote_number}</p>
+            <p style="margin: 8px 0 0 0; font-size: 12px;">Tarih: ${format(new Date(viewingQuote.created_at), 'dd/MM/yyyy', { locale: tr })}</p>
+            <p style="margin: 2px 0 0 0; font-size: 12px;">Geçerlilik: ${format(new Date(viewingQuote.valid_until), 'dd/MM/yyyy', { locale: tr })}</p>
           </div>
         </div>
 
@@ -339,15 +394,14 @@ export default function QuotesPage() {
             ${client?.email ? `<p style="margin: 0 0 3px 0; font-size: 12px;">E-posta: ${client.email}</p>` : ''}
             ${client?.phone ? `<p style="margin: 0 0 3px 0; font-size: 12px;">Telefon: ${client.phone}</p>` : ''}
             ${client?.address ? `<p style="margin: 0 0 3px 0; font-size: 12px;">Adres: ${client.address}</p>` : ''}
-            ${client?.contactPerson ? `<p style="margin: 0; font-size: 12px;">Yetkili: ${client.contactPerson}</p>` : ''}
+            ${client?.contact_person ? `<p style="margin: 0; font-size: 12px;">Yetkili: ${client.contact_person}</p>` : ''}
           </div>
         </div>
 
         <!-- Project Title -->
         <div style="margin-bottom: 30px;">
           <h3 style="margin: 0 0 10px 0; font-size: 16px; font-weight: bold; color: #1e40af;">PROJE DETAYI</h3>
-          <h4 style="margin: 0 0 10px 0; font-size: 18px; font-weight: bold; color: #000;">${viewingQuote.title}</h4>
-          ${viewingQuote.notes ? `<p style="margin: 0; font-size: 12px; color: #666; line-height: 1.5;">${viewingQuote.notes}</p>` : ''}
+          <h4 style="margin: 0 0 10px 0; font-size: 18px; font-weight: bold; color: #000;">${viewingQuote.description}</h4>
         </div>
 
         <!-- Services Table -->
@@ -364,10 +418,10 @@ export default function QuotesPage() {
             </thead>
             <tbody>
               <tr>
-                <td style="padding: 12px 8px; border: 1px solid #e5e7eb; font-size: 12px;">${viewingQuote.title}</td>
+                <td style="padding: 12px 8px; border: 1px solid #e5e7eb; font-size: 12px;">${viewingQuote.description}</td>
                 <td style="padding: 12px 8px; text-align: center; border: 1px solid #e5e7eb; font-size: 12px;">1</td>
-                <td style="padding: 12px 8px; text-align: right; border: 1px solid #e5e7eb; font-size: 12px;">${formatCurrency(viewingQuote.subtotal, viewingQuote.currencyId)}</td>
-                <td style="padding: 12px 8px; text-align: right; border: 1px solid #e5e7eb; font-size: 12px; font-weight: bold;">${formatCurrency(viewingQuote.subtotal, viewingQuote.currencyId)}</td>
+                <td style="padding: 12px 8px; text-align: right; border: 1px solid #e5e7eb; font-size: 12px;">${formatCurrency(viewingQuote.net_amount, viewingQuote.currency_id)}</td>
+                <td style="padding: 12px 8px; text-align: right; border: 1px solid #e5e7eb; font-size: 12px; font-weight: bold;">${formatCurrency(viewingQuote.net_amount, viewingQuote.currency_id)}</td>
               </tr>
             </tbody>
           </table>
@@ -380,43 +434,20 @@ export default function QuotesPage() {
               <table style="width: 100%; border-collapse: collapse;">
                 <tr>
                   <td style="padding: 8px 12px; text-align: right; font-size: 12px; border-bottom: 1px solid #e5e7eb;">Ara Toplam:</td>
-                  <td style="padding: 8px 12px; text-align: right; font-size: 12px; font-weight: bold; border-bottom: 1px solid #e5e7eb;">${formatCurrency(viewingQuote.subtotal, viewingQuote.currencyId)}</td>
+                  <td style="padding: 8px 12px; text-align: right; font-size: 12px; font-weight: bold; border-bottom: 1px solid #e5e7eb;">${formatCurrency(viewingQuote.net_amount, viewingQuote.currency_id)}</td>
                 </tr>
                 <tr>
-                  <td style="padding: 8px 12px; text-align: right; font-size: 12px; border-bottom: 1px solid #e5e7eb;">KDV (${((viewingQuote.vatAmount / viewingQuote.subtotal) * 100).toFixed(0)}%):</td>
-                  <td style="padding: 8px 12px; text-align: right; font-size: 12px; font-weight: bold; border-bottom: 1px solid #e5e7eb;">${formatCurrency(viewingQuote.vatAmount, viewingQuote.currencyId)}</td>
-                </tr>
-                ${viewingQuote.tevkifatApplied && viewingQuote.tevkifatAmount ? `
-                <tr style="background-color: #fff3cd; border: 1px solid #ffeaa7;">
-                  <td style="padding: 8px 12px; text-align: right; font-size: 12px; color: #856404;">Tevkifat (${viewingQuote.tevkifatRate}):</td>
-                  <td style="padding: 8px 12px; text-align: right; font-size: 12px; font-weight: bold; color: #856404;">-${formatCurrency(viewingQuote.tevkifatAmount, viewingQuote.currencyId)}</td>
+                  <td style="padding: 8px 12px; text-align: right; font-size: 12px; border-bottom: 1px solid #e5e7eb;">KDV (${viewingQuote.vat_rate}%):</td>
+                  <td style="padding: 8px 12px; text-align: right; font-size: 12px; font-weight: bold; border-bottom: 1px solid #e5e7eb;">${formatCurrency((viewingQuote.total_amount - viewingQuote.net_amount), viewingQuote.currency_id)}</td>
                 </tr>
                 <tr style="background-color: #1e40af; color: white;">
                   <td style="padding: 12px 12px; text-align: right; font-size: 14px; font-weight: bold;">ÖDENECEK TUTAR:</td>
-                  <td style="padding: 12px 12px; text-align: right; font-size: 16px; font-weight: bold;">${formatCurrency(viewingQuote.netAmountAfterTevkifat || 0, viewingQuote.currencyId)}</td>
+                  <td style="padding: 12px 12px; text-align: right; font-size: 16px; font-weight: bold;">${formatCurrency(viewingQuote.total_amount, viewingQuote.currency_id)}</td>
                 </tr>
-                ` : `
-                <tr style="background-color: #1e40af; color: white;">
-                  <td style="padding: 12px 12px; text-align: right; font-size: 14px; font-weight: bold;">ÖDENECEK TUTAR:</td>
-                  <td style="padding: 12px 12px; text-align: right; font-size: 16px; font-weight: bold;">${formatCurrency(viewingQuote.total, viewingQuote.currencyId)}</td>
-                </tr>
-                `}
               </table>
             </div>
           </div>
         </div>
-        
-
-        <!-- Terms -->
-        ${viewingQuote.termsAndConditions ? `
-        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-          <h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold; color: #1e40af;">ŞARTLAR VE KOŞULLAR</h3>
-          <div style="margin: 0; font-size: 11px; color: #666; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">
-            ${viewingQuote.termsAndConditions.replace(/{{validUntil}}/g, format(viewingQuote.validUntil, 'dd/MM/yyyy', { locale: tr }))}
-          </div>
-          <div style="height: 20mm;"></div>
-        </div>
-        ` : ''}
 
         <!-- Footer -->
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; margin-bottom: 10mm;">
@@ -464,7 +495,7 @@ export default function QuotesPage() {
       }
 
       // PDF'i indir
-      pdf.save(`${viewingQuote.quoteNumber}-${viewingQuote.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+      pdf.save(`${viewingQuote.quote_number}-${viewingQuote.description?.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
 
     } catch (error) {
       console.error('PDF oluşturma hatası:', error);
@@ -513,11 +544,11 @@ export default function QuotesPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tüm Durumlar</SelectItem>
-              <SelectItem value="draft">Taslak</SelectItem>
-              <SelectItem value="sent">Gönderildi</SelectItem>
+              <SelectItem value="pending">Bekliyor</SelectItem>
               <SelectItem value="accepted">Kabul Edildi</SelectItem>
               <SelectItem value="rejected">Reddedildi</SelectItem>
               <SelectItem value="expired">Süresi Doldu</SelectItem>
+              <SelectItem value="converted">Faturaya Çevrildi</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -559,7 +590,7 @@ export default function QuotesPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {quotes.filter(q => q.status === 'sent').length}
+                {quotes.filter(q => q.status === 'pending').length}
               </div>
               <p className="text-xs text-muted-foreground">
                 Yanıt beklenen
@@ -575,7 +606,7 @@ export default function QuotesPage() {
             <CardContent>
               <div className="text-2xl font-bold text-purple-600">
                 {formatCurrency(
-                  quotes.filter(q => q.status === 'accepted').reduce((sum, q) => sum + q.total, 0),
+                  quotes.filter(q => q.status === 'accepted').reduce((sum, q) => sum + (q.total_amount || 0), 0),
                   '1'
                 )}
               </div>
@@ -598,9 +629,9 @@ export default function QuotesPage() {
             {filteredQuotes.length > 0 ? (
               <div className="space-y-4">
                 {filteredQuotes
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                   .map((quote) => {
-                    const client = clients.find(c => c.id === quote.clientId);
+                    const client = clients.find(c => c.id === quote.client_id);
                     
                     return (
                       <div key={quote.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -608,22 +639,16 @@ export default function QuotesPage() {
                           <div className="flex items-center space-x-3">
                             <div>
                               <div className="flex items-center space-x-2">
-                                <h3 className="font-medium">{quote.title}</h3>
+                                <h3 className="font-medium">{quote.description}</h3>
                                 {getStatusBadge(quote.status)}
                               </div>
                               
                               <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                                <span className="font-mono">{quote.quoteNumber}</span>
+                                <span className="font-mono">{quote.quote_number}</span>
                                 <span>{client?.name}</span>
-                                <span>Vade: {format(quote.validUntil, 'dd MMM yyyy', { locale: tr })}</span>
-                                <span>Oluşturulma: {format(quote.createdAt, 'dd MMM yyyy', { locale: tr })}</span>
+                                <span>Vade: {format(new Date(quote.valid_until), 'dd MMM yyyy', { locale: tr })}</span>
+                                <span>Oluşturulma: {format(new Date(quote.created_at), 'dd MMM yyyy', { locale: tr })}</span>
                               </div>
-                              
-                              {quote.notes && (
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {quote.notes}
-                                </p>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -631,10 +656,10 @@ export default function QuotesPage() {
                         <div className="flex items-center space-x-4">
                           <div className="text-right">
                             <div className="text-lg font-semibold text-blue-600">
-                              {formatCurrency(quote.total, quote.currencyId)}
+                              {formatCurrency(quote.total_amount, quote.currency_id)}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              KDV: {formatCurrency(quote.vatAmount, quote.currencyId)}
+                              KDV: {formatCurrency((quote.total_amount - quote.net_amount), quote.currency_id)}
                             </div>
                           </div>
                           
@@ -655,7 +680,7 @@ export default function QuotesPage() {
                               <Copy className="h-4 w-4" />
                             </Button>
                             
-                            {quote.status === 'draft' && (
+                            {quote.status === 'pending' && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -665,11 +690,11 @@ export default function QuotesPage() {
                               </Button>
                             )}
                             
-                            {quote.status === 'draft' && (
+                            {quote.status === 'pending' && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => updateQuoteStatus(quote.id, 'sent')}
+                                onClick={() => updateQuoteStatus(quote.id, 'accepted')}
                                 className="text-blue-600 hover:text-blue-700"
                               >
                                 <Send className="h-4 w-4 mr-1" />
@@ -677,15 +702,15 @@ export default function QuotesPage() {
                               </Button>
                             )}
                             
-                            {quote.status === 'sent' && (
+                            {quote.status === 'accepted' && (
                               <>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => updateQuoteStatus(quote.id, 'accepted')}
+                                  onClick={() => updateQuoteStatus(quote.id, 'converted')}
                                   className="text-green-600 hover:text-green-700"
                                 >
-                                  Kabul Et
+                                  Faturaya Çevir
                                 </Button>
                                 <Button
                                   variant="outline"
@@ -921,8 +946,8 @@ export default function QuotesPage() {
                     <Switch
                       id="tevkifat-applied"
                       checked={formData.tevkifatApplied}
-                      onCheckedChange={(checked) => setFormData(prev => ({ 
-                        ...prev, 
+                      onCheckedChange={(checked) => setFormData(prev => ({
+                        ...prev,
                         tevkifatApplied: checked,
                         tevkifatRate: checked ? prev.tevkifatRate : ''
                       }))}
@@ -944,8 +969,8 @@ export default function QuotesPage() {
                         </SelectTrigger>
                         <SelectContent>
                           {companySettings?.tevkifatRates
-                            ?.filter(rate => rate.isActive)
-                            .map((rate) => (
+                            ?.filter((rate: any) => rate.isActive)
+                            .map((rate: any) => (
                               <SelectItem key={rate.id} value={rate.code}>
                                 {rate.code} - {rate.description}
                               </SelectItem>
@@ -1016,7 +1041,7 @@ export default function QuotesPage() {
             <DialogHeader>
               <DialogTitle>Teklif Detayı</DialogTitle>
               <DialogDescription>
-                {viewingQuote?.quoteNumber} - {viewingQuote?.title}
+                {viewingQuote?.quote_number} - {viewingQuote?.description}
               </DialogDescription>
             </DialogHeader>
             
@@ -1032,12 +1057,12 @@ export default function QuotesPage() {
                     </div>
                     <div className="text-right">
                       <h3 className="text-xl font-semibold">TEKLİF</h3>
-                      <p className="text-sm font-mono">{viewingQuote.quoteNumber}</p>
+                      <p className="text-sm font-mono">{viewingQuote.quote_number}</p>
                       <p className="text-sm text-muted-foreground">
-                        Tarih: {format(viewingQuote.createdAt, 'dd/MM/yyyy', { locale: tr })}
+                        Tarih: {format(new Date(viewingQuote.created_at), 'dd/MM/yyyy', { locale: tr })}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Geçerlilik: {format(viewingQuote.validUntil, 'dd/MM/yyyy', { locale: tr })}
+                        Geçerlilik: {format(new Date(viewingQuote.valid_until), 'dd/MM/yyyy', { locale: tr })}
                       </p>
                     </div>
                   </div>
@@ -1047,9 +1072,9 @@ export default function QuotesPage() {
                 <div>
                   <h4 className="font-medium mb-2">MÜŞTERİ</h4>
                   <div className="bg-white p-4 border rounded-lg">
-                    <p className="font-medium">{clients.find(c => c.id === viewingQuote.clientId)?.name}</p>
+                    <p className="font-medium">{clients.find(c => c.id === viewingQuote.client_id)?.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {clients.find(c => c.id === viewingQuote.clientId)?.email}
+                      {clients.find(c => c.id === viewingQuote.client_id)?.email}
                     </p>
                   </div>
                 </div>
@@ -1057,10 +1082,7 @@ export default function QuotesPage() {
                 {/* Quote Title */}
                 <div>
                   <h4 className="font-medium mb-2">PROJE</h4>
-                  <p className="text-lg font-medium">{viewingQuote.title}</p>
-                  {viewingQuote.notes && (
-                    <p className="text-muted-foreground mt-2">{viewingQuote.notes}</p>
-                  )}
+                  <p className="text-lg font-medium">{viewingQuote.description}</p>
                 </div>
 
                 {/* Quote Items - Simulated data since we don't have QuoteItems in store yet */}
@@ -1080,8 +1102,8 @@ export default function QuotesPage() {
                         <TableRow>
                           <TableCell>Web Tasarım ve Geliştirme</TableCell>
                           <TableCell>1</TableCell>
-                          <TableCell>{formatCurrency(viewingQuote.subtotal, viewingQuote.currencyId)}</TableCell>
-                          <TableCell>{formatCurrency(viewingQuote.subtotal, viewingQuote.currencyId)}</TableCell>
+                          <TableCell>{formatCurrency(viewingQuote.net_amount, viewingQuote.currency_id)}</TableCell>
+                          <TableCell>{formatCurrency(viewingQuote.net_amount, viewingQuote.currency_id)}</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
@@ -1094,18 +1116,18 @@ export default function QuotesPage() {
                     <div className="flex justify-between">
                       <span>Ara Toplam:</span>
                       <span className="font-medium">
-                        {formatCurrency(viewingQuote.subtotal, viewingQuote.currencyId)}
+                        {formatCurrency(viewingQuote.net_amount, viewingQuote.currency_id)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>KDV:</span>
                       <span className="font-medium">
-                        {formatCurrency(viewingQuote.vatAmount, viewingQuote.currencyId)}
+                        {formatCurrency((viewingQuote.total_amount - viewingQuote.net_amount), viewingQuote.currency_id)}
                       </span>
                     </div>
                     <div className="flex justify-between text-lg font-bold border-t pt-2">
                       <span>Genel Toplam:</span>
-                      <span>{formatCurrency(viewingQuote.total, viewingQuote.currencyId)}</span>
+                      <span>{formatCurrency(viewingQuote.total_amount, viewingQuote.currency_id)}</span>
                     </div>
                   </div>
                 </div>

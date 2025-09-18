@@ -9,8 +9,17 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type') as EmailOtpType | null
   const next = searchParams.get('next') ?? '/dashboard'
 
-  // Get base URL from environment variables
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  // Get base URL from environment variables - PRODUCTION FIRST
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://floww3-1.vercel.app'
+  
+  console.log('🔍 Email confirmation debug:', {
+    baseUrl,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    token_hash: token_hash ? 'present' : 'missing',
+    type,
+    next
+  });
 
   if (token_hash && type) {
     const supabase = await createClient()

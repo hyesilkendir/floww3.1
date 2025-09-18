@@ -49,7 +49,7 @@ export default function AnalizPage() {
     name: '',
     email: '',
     phone: '',
-    currencyId: '1'
+    currencyId: 'TRY'
   });
 
   const [isQuickTransactionOpen, setIsQuickTransactionOpen] = useState(false);

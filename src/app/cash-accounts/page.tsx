@@ -12,27 +12,27 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { AuthLayout } from '@/components/layout/auth-layout';
-import { useAppStore } from '@/lib/store';
+import { useCleanStore } from '@/lib/clean-store';
 import { Plus, Edit, Trash2, Wallet, DollarSign, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 export default function CashAccountsPage() {
   const router = useRouter();
-  const { 
-    cashAccounts, 
-    currencies, 
+  const {
+    cashAccounts,
+    currencies,
     transactions,
-    addCashAccount, 
-    updateCashAccount, 
-    deleteCashAccount 
-  } = useAppStore();
+    addCashAccount,
+    updateCashAccount,
+    deleteCashAccount
+  } = useCleanStore();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    currencyId: '1', // TRY default
+    currencyId: 'TRY', // TRY default
     balance: '0',
     isDefault: false
   });
@@ -40,7 +40,7 @@ export default function CashAccountsPage() {
   const resetForm = () => {
     setFormData({
       name: '',
-      currencyId: '1',
+      currencyId: 'TRY',
       balance: '0',
       isDefault: false
     });
@@ -53,18 +53,17 @@ export default function CashAccountsPage() {
     if (editingAccount) {
       updateCashAccount(editingAccount, {
         name: formData.name,
-        currencyId: formData.currencyId,
+        currency_id: formData.currencyId,
         balance: parseFloat(formData.balance) || 0,
-        isDefault: formData.isDefault
+        is_default: formData.isDefault
       });
     } else {
       addCashAccount({
         name: formData.name,
-        currencyId: formData.currencyId,
+        currency_id: formData.currencyId,
         balance: parseFloat(formData.balance) || 0,
-        isDefault: formData.isDefault,
-        isActive: true,
-        userId: '1'
+        is_default: formData.isDefault,
+        is_active: true
       });
     }
 
@@ -75,9 +74,9 @@ export default function CashAccountsPage() {
   const handleEdit = (account: any) => {
     setFormData({
       name: account.name,
-      currencyId: account.currencyId,
+      currencyId: account.currency_id,
       balance: account.balance.toString(),
-      isDefault: account.isDefault
+      isDefault: account.is_default
     });
     setEditingAccount(account.id);
     setIsDialogOpen(true);
@@ -95,15 +94,15 @@ export default function CashAccountsPage() {
 
   // Kasa bakiye hesaplama (işlemlerden)
   const calculateAccountBalance = (accountId: string) => {
-    const accountTransactions = transactions.filter(t => 
-      t.cashAccountId === accountId || (!t.cashAccountId && cashAccounts.find(ca => ca.id === accountId)?.isDefault)
+    const accountTransactions = transactions.filter(t =>
+      t.cash_account_id === accountId || (!t.cash_account_id && cashAccounts.find(ca => ca.id === accountId)?.is_default)
     );
     
     const baseBalance = cashAccounts.find(ca => ca.id === accountId)?.balance || 0;
     
     return accountTransactions.reduce((balance, transaction) => {
-      return transaction.type === 'income' 
-        ? balance + transaction.amount 
+      return transaction.type === 'income'
+        ? balance + transaction.amount
         : balance - transaction.amount;
     }, baseBalance);
   };
@@ -228,8 +227,8 @@ export default function CashAccountsPage() {
                 {formatCurrency(
                   cashAccounts.reduce((total, account) => 
                     total + calculateAccountBalance(account.id), 0
-                  ), 
-                  '1' // TRY
+                  ),
+                  'TRY' // TRY
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -246,14 +245,14 @@ export default function CashAccountsPage() {
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">
                 {(() => {
-                  const defaultAccount = cashAccounts.find(ca => ca.isDefault);
-                  return defaultAccount 
-                    ? formatCurrency(calculateAccountBalance(defaultAccount.id), defaultAccount.currencyId)
+                  const defaultAccount = cashAccounts.find(ca => ca.is_default);
+                  return defaultAccount
+                    ? formatCurrency(calculateAccountBalance(defaultAccount.id), defaultAccount.currency_id)
                     : 'TL 0.00';
                 })()}
               </div>
               <p className="text-xs text-muted-foreground">
-                {cashAccounts.find(ca => ca.isDefault)?.name || 'Tanımlanmamış'}
+                {cashAccounts.find(ca => ca.is_default)?.name || 'Tanımlanmamış'}
               </p>
             </CardContent>
           </Card>
@@ -285,23 +284,23 @@ export default function CashAccountsPage() {
                     <TableRow key={account.id}>
                       <TableCell className="font-medium">
                         {account.name}
-                        {account.isDefault && (
+                        {account.is_default && (
                           <Badge variant="secondary" className="ml-2">Ana</Badge>
                         )}
                       </TableCell>
                       <TableCell>
-                        {currencies.find(c => c.id === account.currencyId)?.code || 'TRY'}
+                        {currencies.find(c => c.id === account.currency_id)?.code || 'TRY'}
                       </TableCell>
                       <TableCell className="font-mono">
-                        {formatCurrency(calculateAccountBalance(account.id), account.currencyId)}
+                        {formatCurrency(calculateAccountBalance(account.id), account.currency_id)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={account.isActive ? "default" : "secondary"}>
-                          {account.isActive ? 'Aktif' : 'Pasif'}
+                        <Badge variant={account.is_active ? "default" : "secondary"}>
+                          {account.is_active ? 'Aktif' : 'Pasif'}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {format(account.createdAt, 'dd MMM yyyy', { locale: tr })}
+                        {format(new Date(account.created_at), 'dd MMM yyyy', { locale: tr })}
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
@@ -321,7 +320,7 @@ export default function CashAccountsPage() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          {!account.isDefault && (
+                          {!account.is_default && (
                             <Button
                               size="sm"
                               variant="outline"

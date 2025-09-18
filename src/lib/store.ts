@@ -215,6 +215,9 @@ export const useAppStore = create<AppState>()(
         email: 'info@calaf.co',
         website: 'www.calaf.co',
         taxNumber: '',
+        lightModeLogo: undefined,
+        darkModeLogo: undefined,
+        quoteLogo: undefined,
         tevkifatRates: [
           { id: '1', code: '9/10', numerator: 9, denominator: 10, description: 'Mimarlık ve Mühendislik Hizmetleri', isActive: true },
           { id: '2', code: '7/10', numerator: 7, denominator: 10, description: 'Yazılım ve Bilişim Hizmetleri', isActive: true },
@@ -432,6 +435,7 @@ export const useAppStore = create<AppState>()(
             categories: data.categories.length > 0 ? data.categories : defaultCategories,
             debts: debts,
             currencies: data.currencies.length > 0 ? data.currencies : defaultCurrencies,
+            cashAccounts: data.cashAccounts || [],
             regularPayments: data.regularPayments || [],
             invoices: invoices as any,
             companySettings: (settings as any) || get().companySettings,
@@ -440,9 +444,9 @@ export const useAppStore = create<AppState>()(
           
         } catch (error) {
           console.error('Error loading user data:', error);
-          set({ 
+          set({
             error: 'Veriler yüklenirken hata oluştu',
-            loading: false 
+            loading: false
           });
         }
       },
@@ -486,12 +490,37 @@ export const useAppStore = create<AppState>()(
       // Company settings
       updateCompanySettings: async (data) => {
         try {
-          set((state) => ({
-            companySettings: state.companySettings
+          set((state) => {
+            const newSettings = state.companySettings
               ? { ...state.companySettings, ...data, updatedAt: new Date() }
-              : null,
-          }));
+              : {
+                  id: '1',
+                  companyName: 'CALAF.CO',
+                  address: 'İstanbul, Türkiye',
+                  phone: '+90 212 555 0000',
+                  email: 'info@calaf.co',
+                  website: 'www.calaf.co',
+                  taxNumber: '',
+                  lightModeLogo: undefined,
+                  darkModeLogo: undefined,
+                  quoteLogo: undefined,
+                  tevkifatRates: [],
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                  ...data
+                };
+            
+            console.log('🔄 Company settings updated:', newSettings);
+            console.log('🔄 Logo data in update:', {
+              lightModeLogo: newSettings.lightModeLogo ? 'Present' : 'Not set',
+              darkModeLogo: newSettings.darkModeLogo ? 'Present' : 'Not set',
+              quoteLogo: newSettings.quoteLogo ? 'Present' : 'Not set'
+            });
+            
+            return { companySettings: newSettings };
+          });
         } catch (err) {
+          console.error('Error updating company settings:', err);
           get().setError('Failed to update company settings.');
         }
       },
@@ -674,7 +703,7 @@ export const useAppStore = create<AppState>()(
           } else if (err.code === 'PGRST116') {
             get().setError('Veritabanı bağlantı hatası. Lütfen tekrar deneyin.');
           } else {
-            get().setError(`Personel eklenirken hata oluştu: ${err.message || err}`);
+            get().setError(`Personel eklenirken hata oluştu: ${(err as any).message || err}`);
           }
         }
       },
@@ -916,7 +945,7 @@ export const useAppStore = create<AppState>()(
         } catch (err) {
           console.error('Error updating debt:', err);
           set({ loading: false });
-          get().setError(`Borç güncellenirken hata oluştu: ${err.message || err}`);
+          get().setError(`Borç güncellenirken hata oluştu: ${(err as any).message || err}`);
         }
       },
       
@@ -973,54 +1002,100 @@ export const useAppStore = create<AppState>()(
       // Cash account actions
       addCashAccount: async (cashAccountData) => {
         try {
-          const cashAccount: CashAccount = {
-            ...cashAccountData,
-            id: generateId(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          set((state) => ({ cashAccounts: [...state.cashAccounts, cashAccount] }));
-        } catch (err) {
-          get().setError('Failed to add cash account.');
+          const user = get().user;
+          if (!user) {
+            get().setError('Kullanıcı girişi gerekli.');
+            return;
+          }
+
+          console.log('Adding cash account:', cashAccountData);
+          
+          // Loading state başlat
+          set({ loading: true, error: null });
+          
+          console.log('💾 Saving cash account with userId:', cashAccountData.userId);
+          
+          // Supabase'e kaydet
+          const savedCashAccount = await supabaseService.addCashAccount(cashAccountData);
+          console.log('Cash account saved to Supabase:', savedCashAccount);
+          
+          // Local state'e ekle
+          set((state) => ({
+            cashAccounts: [...state.cashAccounts, savedCashAccount],
+            loading: false
+          }));
+          console.log('Cash account added to local state');
+        } catch (err: any) {
+          console.error('Error adding cash account:', err);
+          set({ loading: false });
+          get().setError(`Kasa eklenirken hata oluştu: ${err.message || err}`);
         }
       },
       
       updateCashAccount: async (id, updates) => {
         try {
+          set({ loading: true, error: null });
+          
+          // Supabase'de güncelle
+          await supabaseService.updateCashAccount(id, updates);
+          
+          // Local state'i güncelle
           set((state) => ({
             cashAccounts: state.cashAccounts.map((account) =>
               account.id === id ? { ...account, ...updates, updatedAt: new Date() } : account
             ),
+            loading: false
           }));
-        } catch (err) {
-          get().setError('Failed to update cash account.');
+        } catch (err: any) {
+          console.error('Error updating cash account:', err);
+          set({ loading: false });
+          get().setError(`Kasa güncellenirken hata oluştu: ${err.message || err}`);
         }
       },
       
       deleteCashAccount: async (id) => {
         try {
+          set({ loading: true, error: null });
+          
+          // Supabase'den sil
+          await supabaseService.deleteCashAccount(id);
+          
+          // Local state'den sil
           set((state) => ({
             cashAccounts: state.cashAccounts.filter((account) => account.id !== id),
+            loading: false
           }));
-        } catch (err) {
-          get().setError('Failed to delete cash account.');
+        } catch (err: any) {
+          console.error('Error deleting cash account:', err);
+          set({ loading: false });
+          get().setError(`Kasa silinirken hata oluştu: ${err.message || err}`);
         }
       },
       
       // Invoice actions
       addInvoice: async (invoiceData) => {
         try {
+          console.log('🔍 DEBUG: Store addInvoice başladı');
+          console.log('🔍 DEBUG: invoiceData:', invoiceData);
+          
           const user = get().user;
-          if (!user) return;
+          if (!user) {
+            console.log('🔍 DEBUG: User bulunamadı');
+            return;
+          }
+          
+          console.log('🔍 DEBUG: User:', user);
+          console.log('🔍 DEBUG: supabaseService.addInvoice çağrılıyor...');
           
           // Faturayı kaydet
           const saved = await supabaseService.addInvoice({ ...invoiceData, userId: user.id });
+          console.log('🔍 DEBUG: supabaseService.addInvoice sonucu:', saved);
           
           // Client balance'ı güncelle (RPC fonksiyonu ile)
           if (saved.clientId && saved.netAmountAfterTevkifat > 0) {
             try {
               // Yeni RPC fonksiyonu ile client balance'ı güncelle
-              const { data, error } = await supabaseService.supabase.rpc('update_client_balance', {
+              const { data, error } = await supabaseService.supabaseClient.rpc('update_client_balance', {
                 p_client_id: saved.clientId,
                 p_amount: saved.netAmountAfterTevkifat,
                 p_user_id: user.id
@@ -1050,7 +1125,7 @@ export const useAppStore = create<AppState>()(
               
               // Fallback: Direct update dene
               try {
-                const { error } = await supabaseService.supabase
+                const { error } = await supabaseService.supabaseClient
                   .from('clients')
                   .update({ 
                     balance: saved.netAmountAfterTevkifat,
@@ -1663,11 +1738,10 @@ export const useAppStore = create<AppState>()(
         regularPayments: state.regularPayments,
         notifications: state.notifications,
         notificationPrefs: state.notificationPrefs,
-        companySettings: state.companySettings,
+        companySettings: state.companySettings, // Logo verileri burada persist ediliyor
         theme: state.theme,
         showAmounts: state.showAmounts,
-        error: state.error,
-        loading: state.loading,
+        // error ve loading persist edilmemeli - geçici durumlar
       }),
     }
   )

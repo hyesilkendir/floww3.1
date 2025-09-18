@@ -36,7 +36,7 @@ export default function ClientsPage() {
     contactPerson: '',
     contractStartDate: '',
     contractEndDate: '',
-    currencyId: '1', // Default TRY
+    currencyId: 'TRY', // Default TRY
   });
 
   // Auth kontrolü ve veri yükleme
@@ -111,7 +111,7 @@ export default function ClientsPage() {
       contactPerson: '',
       contractStartDate: '',
       contractEndDate: '',
-      currencyId: '1',
+      currencyId: 'TRY',
     });
     setEditingClient(null);
   };

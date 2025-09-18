@@ -2,8 +2,8 @@
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
-  'https://ffqwomxrfvsjzpyeklvm.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmcXdvbXhyZnZzanpweWVrbHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MjQ4MzQsImV4cCI6MjA3MDQwMDgzNH0.omZjF-e8vkiHy0mdF5OISh7dUJxw0FRUGlPDdithDZM'
+  'https://gjxlfeisaeojbgymehgf.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqeGxmZWlzYWVvamJneW1laGdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MzE4MTIsImV4cCI6MjA3MzUwNzgxMn0.bMCblgaWnkvzHDf1LwirPMRrSAypjt8EXVxr5a-Y9rE'
 );
 
 async function testAuth() {
@@ -12,7 +12,7 @@ async function testAuth() {
   try {
     // 1. Test user registration
     console.log('1️⃣ Test kullanıcısı oluşturuluyor...');
-    const testEmail = 'test@gmail.com';
+    const testEmail = 'test@example.com';
     const testPassword = 'test123456';
     
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({

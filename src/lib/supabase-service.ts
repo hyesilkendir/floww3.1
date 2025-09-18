@@ -624,9 +624,87 @@ export class SupabaseService {
 
   // Cash Accounts
   async getCashAccounts(userId: string): Promise<CashAccount[]> {
-    // Cash accounts şu an store'da tutulduğu için mock data döndürüyoruz
-    // İleride ayrı tablo oluşturulabilir
-    return [];
+    const { data, error } = await this.supabase
+      .from('cash_accounts')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('Error fetching cash accounts:', error);
+      return [];
+    }
+    
+    return (data || []).map(item => ({
+      id: item.id,
+      name: item.name,
+      currencyId: item.currency_id,
+      balance: parseFloat(item.balance) || 0,
+      isDefault: item.is_default,
+      isActive: item.is_active,
+      userId: item.user_id,
+      createdAt: new Date(item.created_at),
+      updatedAt: new Date(item.updated_at)
+    }));
+  }
+
+  async addCashAccount(cashAccount: Omit<CashAccount, 'id' | 'createdAt' | 'updatedAt'>): Promise<CashAccount> {
+    const cashAccountRecord = {
+      name: cashAccount.name,
+      currency_id: cashAccount.currencyId,
+      balance: cashAccount.balance || 0,
+      is_default: cashAccount.isDefault,
+      is_active: cashAccount.isActive !== undefined ? cashAccount.isActive : true,
+      user_id: cashAccount.userId
+    };
+
+    const { data, error } = await this.supabase
+      .from('cash_accounts')
+      .insert([cashAccountRecord])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Supabase cash account insert error:', error);
+      throw error;
+    }
+    
+    return {
+      id: data.id,
+      name: data.name,
+      currencyId: data.currency_id,
+      balance: parseFloat(data.balance) || 0,
+      isDefault: data.is_default,
+      isActive: data.is_active,
+      userId: data.user_id,
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at)
+    };
+  }
+
+  async updateCashAccount(id: string, updates: Partial<CashAccount>): Promise<void> {
+    const updateRecord: any = {};
+    if (updates.name !== undefined) updateRecord.name = updates.name;
+    if (updates.currencyId !== undefined) updateRecord.currency_id = updates.currencyId;
+    if (updates.balance !== undefined) updateRecord.balance = updates.balance;
+    if (updates.isDefault !== undefined) updateRecord.is_default = updates.isDefault;
+    if (updates.isActive !== undefined) updateRecord.is_active = updates.isActive;
+    updateRecord.updated_at = new Date().toISOString();
+
+    const { error } = await this.supabase
+      .from('cash_accounts')
+      .update(updateRecord)
+      .eq('id', id);
+    
+    if (error) throw error;
+  }
+
+  async deleteCashAccount(id: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('cash_accounts')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
   }
 
   // Regular Payments
@@ -995,12 +1073,13 @@ export class SupabaseService {
   // User data initialization
   async initializeUserData(userId: string) {
     try {
-      const [clients, employees, transactions, categories, currencies, regularPayments] = await Promise.all([
+      const [clients, employees, transactions, categories, currencies, cashAccounts, regularPayments] = await Promise.all([
         this.getClients(userId),
         this.getEmployees(userId),
         this.getTransactions(userId),
         this.getCategories(userId),
         this.getCurrencies(),
+        this.getCashAccounts(userId).catch(() => []), // Fallback to empty array if table doesn't exist
         this.getRegularPayments(userId).catch(() => []) // Fallback to empty array if table doesn't exist
       ]);
 
@@ -1012,11 +1091,12 @@ export class SupabaseService {
 
       return {
         clients,
-        employees, 
+        employees,
         transactions,
         categories,
         debts: [], // Empty array for now - debts will be created from regular payments
         currencies,
+        cashAccounts,
         regularPayments
       };
     } catch (error) {

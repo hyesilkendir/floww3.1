@@ -1,0 +1,23 @@
+# Ignore TypeScript config to prevent TS detection issues
+tsconfig.json.bak
+*.tsbuildinfo
+
+# Ignore development files
+.env.local
+.env.development
+.env.test
+
+# Ignore logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db

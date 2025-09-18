@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useCleanStore } from '@/lib/clean-store';
 import { useRouter } from 'next/navigation';
 
@@ -15,7 +16,8 @@ export default function CleanLoginPage() {
   
   const [formData, setFormData] = useState({
     email: '',
-    password: ''
+    password: '',
+    rememberMe: false
   });
 
   // Redirect if already authenticated
@@ -32,7 +34,7 @@ export default function CleanLoginPage() {
       return;
     }
 
-    const success = await signIn(formData.email, formData.password);
+    const success = await signIn(formData.email, formData.password, formData.rememberMe);
     
     if (success) {
       router.push('/clean-dashboard');
@@ -97,6 +99,22 @@ export default function CleanLoginPage() {
                   placeholder="Şifrenizi giriniz"
                   disabled={loading}
                 />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="remember-me"
+                  checked={formData.rememberMe}
+                  onCheckedChange={(checked) =>
+                    setFormData(prev => ({ ...prev, rememberMe: checked as boolean }))
+                  }
+                />
+                <label
+                  htmlFor="remember-me"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Beni hatırla
+                </label>
               </div>
 
               {error && (

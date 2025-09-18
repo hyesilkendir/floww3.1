@@ -42,7 +42,7 @@ export default function EmployeesPage() {
     name: '',
     position: '',
     netSalary: '',
-    currencyId: '1',
+    currencyId: 'TRY',
     payrollPeriod: 'monthly' as 'monthly' | 'weekly' | 'biweekly',
     paymentDay: '1',
     email: '',
@@ -56,7 +56,7 @@ export default function EmployeesPage() {
   const [bonusFormData, setBonusFormData] = useState({
     type: 'bonus' as const,
     amount: '',
-    currencyId: '1',
+    currencyId: 'TRY',
     description: '',
     paymentDate: format(new Date(), 'yyyy-MM-dd'),
   });
@@ -76,7 +76,7 @@ export default function EmployeesPage() {
       name: '',
       position: '',
       netSalary: '',
-      currencyId: '1',
+      currencyId: 'TRY',
       payrollPeriod: 'monthly',
       paymentDay: '1',
       email: '',
@@ -93,7 +93,7 @@ export default function EmployeesPage() {
     setBonusFormData({
       type: 'bonus',
       amount: '',
-      currencyId: '1',
+      currencyId: 'TRY',
       description: '',
       paymentDate: format(new Date(), 'yyyy-MM-dd'),
     });
