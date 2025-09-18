@@ -9,6 +9,9 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type') as EmailOtpType | null
   const next = searchParams.get('next') ?? '/dashboard'
 
+  // Get base URL from environment variables
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
   if (token_hash && type) {
     const supabase = await createClient()
 
@@ -18,8 +21,22 @@ export async function GET(request: NextRequest) {
     })
 
     if (!error) {
-      // redirect user to specified redirect URL or dashboard
-      redirect(next)
+      // Ensure redirect URL is absolute for production
+      const redirectUrl = next.startsWith('/') ? `${baseUrl}${next}` : next
+      
+      // For security, validate redirect URL is from same domain
+      try {
+        const redirectUrlObj = new URL(redirectUrl)
+        const baseUrlObj = new URL(baseUrl)
+        
+        if (redirectUrlObj.origin === baseUrlObj.origin) {
+          redirect(next) // Use relative redirect for same origin
+        } else {
+          redirect('/dashboard') // Fallback to dashboard for external URLs
+        }
+      } catch {
+        redirect('/dashboard') // Fallback if URL parsing fails
+      }
     }
   }
 

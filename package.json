@@ -9,6 +9,9 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "validate": "npm run type-check && npm run lint",
+    "build:production": "set NODE_ENV=production && npm run validate && npm run build",
+    "start:production": "set NODE_ENV=production && npm run start",
+    "preview": "npm run build:production && npm run start:production",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
@@ -19,7 +22,11 @@
     "test:migration": "node test-migration.js",
     "setup": "npm install && cp env.example .env.local && npm run test:db",
     "deploy": "node deploy.js",
-    "deploy:quick": "vercel --prod"
+    "deploy:quick": "vercel --prod",
+    "deploy:vercel": "npm run build:production && vercel --prod",
+    "health-check": "curl -f http://localhost:3000/api/health || exit 1",
+    "clean": "rm -rf .next out dist",
+    "reinstall": "rm -rf node_modules package-lock.json && npm install"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.2",

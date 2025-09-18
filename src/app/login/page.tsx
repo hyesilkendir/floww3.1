@@ -40,16 +40,39 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setError('E-posta veya şifre yanlış');
+        console.error('Login error:', error);
+        
+        // Detaylı hata mesajları
+        if (error.message.includes('Invalid login credentials')) {
+          setError('E-posta veya şifre yanlış. Hesabınız var mı?');
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('E-posta adresinizi doğrulamalısınız. E-postanızı kontrol edin.');
+        } else if (error.message.includes('Too many requests')) {
+          setError('Çok fazla deneme. Lütfen biraz bekleyin.');
+        } else {
+          setError(`Giriş hatası: ${error.message}`);
+        }
         return;
       }
 
       if (data.user) {
-        // Başarılı giriş - direkt analiz sayfasına git
-        window.location.href = '/analiz';
+        console.log('✅ Login successful:', data.user.email);
+        
+        // User'ı localStorage'a kaydet (uyumluluk için)
+        localStorage.setItem('user', JSON.stringify({
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.user_metadata?.name || data.user.email || 'Kullanıcı',
+          username: data.user.user_metadata?.username || (data.user.email ? data.user.email.split('@')[0] : 'user'),
+          company_name: data.user.user_metadata?.company_name || 'CALAF.CO'
+        }));
+        
+        // Başarılı giriş - dashboard sayfasına git
+        window.location.href = '/dashboard';
       }
     } catch (err) {
-      setError('Giriş sırasında hata oluştu');
+      console.error('Login catch error:', err);
+      setError('Beklenmeyen bir hata oluştu');
     } finally {
       setIsLoading(false);
     }
@@ -94,31 +117,44 @@ export default function LoginPage() {
       });
 
       if (error) {
+        console.error('Register error:', error);
+        
         if (error.message.includes('already registered')) {
           setError('Bu e-posta zaten kayıtlı');
+        } else if (error.message.includes('Password should be')) {
+          setError('Şifre en az 6 karakter olmalıdır');
+        } else if (error.message.includes('Unable to validate email')) {
+          setError('Geçersiz e-posta adresi');
         } else {
-          setError(error.message || 'Kayıt olurken bir hata oluştu');
+          setError(`Kayıt hatası: ${error.message}`);
         }
         return;
       }
 
       if (data.user) {
-        // Kayıt başarılı - otomatik giriş dene
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: registerData.email,
-          password: registerData.password,
-        });
+        console.log('✅ Registration successful:', data.user.email);
         
-        if (!signInError) {
-          window.location.href = '/dashboard';
-      } else {
-          setError('');
-          setActiveTab('login');
-          alert('Kayıt başarılı! Giriş yapabilirsiniz.');
+        if (data.user.email_confirmed_at) {
+          // E-posta onaylandı - otomatik giriş yap
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: registerData.email,
+            password: registerData.password,
+          });
+          
+          if (!signInError) {
+            window.location.href = '/dashboard';
+            return;
+          }
         }
+        
+        // E-posta onayı gerekli
+        setError('');
+        setActiveTab('login');
+        alert('Kayıt başarılı! E-postanıza gelen doğrulama linkine tıklayın ve ardından giriş yapın.');
       }
     } catch (err) {
-      setError('Kayıt olurken bir hata oluştu');
+      console.error('Register catch error:', err);
+      setError('Beklenmeyen bir hata oluştu');
     } finally {
       setIsLoading(false);
     }
